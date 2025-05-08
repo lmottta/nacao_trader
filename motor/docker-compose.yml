@@ -1,0 +1,83 @@
+version: '3.9'
+
+services:
+  # API principal
+  api:
+    build: .
+    container_name: nacao-trader-motor-api
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=True
+      - LOG_LEVEL=INFO
+      - PORT=8000
+      - HOST=0.0.0.0
+      # As demais variáveis de ambiente são carregadas do .env
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    networks:
+      - nacao-trader-network
+    restart: unless-stopped
+
+  # Serviço de coleta de dados
+  collector:
+    build: .
+    container_name: nacao-trader-motor-collector
+    command: python -m src.collectors.run_collectors continuous
+    volumes:
+      - .:/app
+    environment:
+      - DEBUG=True
+      - LOG_LEVEL=INFO
+      # As demais variáveis de ambiente são carregadas do .env
+    env_file:
+      - .env
+    depends_on:
+      - api
+      - redis
+    networks:
+      - nacao-trader-network
+    restart: unless-stopped
+
+  # Redis para processamento assíncrono
+  redis:
+    image: redis:7-alpine
+    container_name: nacao-trader-motor-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - nacao-trader-network
+    restart: unless-stopped
+
+  # Flower para monitoramento de tarefas Celery (opcional)
+  flower:
+    build: .
+    container_name: nacao-trader-motor-flower
+    command: celery -A src.tasks.worker:celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      - DEBUG=True
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - api
+    networks:
+      - nacao-trader-network
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+
+networks:
+  nacao-trader-network:
+    driver: bridge 

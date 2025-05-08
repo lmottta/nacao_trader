@@ -1,0 +1,146 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+      - develop
+  pull_request:
+    branches:
+      - main
+      - staging
+      - develop
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Instalar dependências
+        run: npm ci
+      
+      - name: Executar linter
+        run: npm run lint
+        
+      # Adicione testes quando implementados
+      # - name: Executar testes
+      #   run: npm test
+  
+  deploy-development:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/develop'
+    
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v3
+      
+      - name: Instalar CLI do Railway
+        run: npm i -g @railway/cli
+      
+      - name: Deploy para Development
+        run: railway up --service nacao-trader-frontend --environment development
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+  
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/staging'
+    
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v3
+      
+      - name: Instalar CLI do Railway
+        run: npm i -g @railway/cli
+      
+      - name: Deploy para Staging
+        run: railway up --service nacao-trader-frontend --environment staging
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+  
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v3
+      
+      - name: Instalar CLI do Railway
+        run: npm i -g @railway/cli
+      
+      - name: Deploy para Production
+        run: railway up --service nacao-trader-frontend --environment production
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+  deploy-motor-development:
+    name: Deploy Motor to Development
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/develop'
+    
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v3
+      
+      - name: Instalar CLI do Railway
+        run: npm i -g @railway/cli
+      
+      - name: Deploy para Development
+        run: cd motor && railway up --service nacao-trader-motor --environment development
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+  
+  deploy-motor-staging:
+    name: Deploy Motor to Staging
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/staging'
+    
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v3
+      
+      - name: Instalar CLI do Railway
+        run: npm i -g @railway/cli
+      
+      - name: Deploy para Staging
+        run: cd motor && railway up --service nacao-trader-motor --environment staging
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+  
+  deploy-motor-production:
+    name: Deploy Motor to Production
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v3
+      
+      - name: Instalar CLI do Railway
+        run: npm i -g @railway/cli
+      
+      - name: Deploy para Production
+        run: cd motor && railway up --service nacao-trader-motor --environment production
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }} 

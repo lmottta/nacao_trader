@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #00FF85;
+  --alert: #FF4D4D;
+  --background: #0A0A0A;
+  --text: #F5F5F5;
+  --card-bg: #121212;
+  --secondary-bg: #1E1E1E;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--background);
+  color: var(--text);
+  margin: 0;
+  padding: 0;
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-[#00FF85] text-black font-semibold py-2 px-6 rounded-lg 
+    hover:bg-opacity-90 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-[#00FF85] focus:ring-opacity-50;
+  }
+  
+  .btn-secondary {
+    @apply bg-[#1E1E1E] text-[#F5F5F5] font-semibold py-2 px-6 rounded-lg border border-[#333333] 
+    hover:bg-[#2A2A2A] transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-[#333333] focus:ring-opacity-50;
+  }
+  
+  .card {
+    @apply bg-[#121212] rounded-xl p-4 shadow-lg border border-[#222222];
+  }
+  
+  .input-field {
+    @apply bg-[#1E1E1E] text-[#F5F5F5] border border-[#333333] rounded-lg p-3 w-full
+    focus:outline-none focus:ring-2 focus:ring-[#00FF85] focus:ring-opacity-50;
+  }
+
+  .call-signal {
+    @apply text-[#00FF85];
+  }
+  
+  .put-signal {
+    @apply text-[#FF4D4D];
+  }
+}

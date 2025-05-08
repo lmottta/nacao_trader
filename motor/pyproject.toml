@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nacao-trader-motor"
+version = "0.1.0"
+description = "Motor de Sinais ML para a plataforma Nação Trader"
+readme = "README.md"
+authors = [
+    {name = "Nação Trader Team"}
+]
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.103.1",
+    "uvicorn>=0.23.2",
+    "pydantic>=2.4.2",
+    "python-dotenv>=1.0.0",
+    # Dependências adicionais em requirements.txt
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.2",
+    "pytest-cov>=4.1.0",
+    "black>=23.9.1",
+    "isort>=5.12.0",
+    "mypy>=1.5.1",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/nacaotrader/motor"
+"Bug Tracker" = "https://github.com/nacaotrader/motor/issues"
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.10"
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+strict_optional = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"] 
