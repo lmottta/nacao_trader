@@ -406,52 +406,43 @@ const Profile: React.FC = () => {
                       Ativos favoritos
                     </h2>
                     
-                    {favoriteAssets.length === 0 ? (
-                      <div className="text-center py-8 text-gray-400">
-                        <div className="mb-2">
-                          <Star size={40} className="mx-auto text-gray-700" />
-                        </div>
-                        <p className="mb-1">Você ainda não favoritou nenhum ativo.</p>
-                        <p className="text-sm">Navegue pelos ativos disponíveis e adicione até 10 favoritos para acompanhamento.</p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {favoriteAssets.map(assetId => {
-                          const assetDetails = getAssetDetails(assetId);
-                          return (
-                            <div key={assetId} className="bg-[#1A1A1A] p-4 rounded-lg flex flex-col hover:border-[#333333] border border-transparent transition-colors">
-                              <div className="flex justify-between items-start mb-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+                      {favoriteAssets.map((assetId) => {
+                        const asset = getAssetDetails(assetId);
+                        return (
+                          <div key={assetId} className="bg-gray-800 rounded-lg p-4 flex justify-between items-center">
+                            <div>
+                              {asset ? (
+                                <>
+                                  <div className="flex items-center mb-2">
+                                    <span className="text-xl font-semibold text-white">{asset.symbol}</span>
+                                    <span className={`ml-2 px-2 py-1 text-xs rounded ${getAssetTypeColor(asset.type)}`}>
+                                      {asset.type}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-gray-300">{asset.name}</p>
+                                </>
+                              ) : (
                                 <div>
-                                  <span className="font-bold block">
-                                    {assetDetails?.symbol || assetId}
-                                  </span>
-                                  <span className="text-sm text-gray-400 block">
-                                    {assetDetails?.name || 'Ativo Indisponível'}
-                                  </span>
+                                  <p className="text-white">Ativo Indisponível</p>
                                 </div>
-                                <button
-                                  onClick={() => handleToggleFavorite(assetId)}
-                                  className="text-[#FF4D4D] hover:bg-[#2A2A2A] rounded-full p-1.5 transition-colors"
-                                  title="Remover dos favoritos"
-                                  disabled={loading}
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              </div>
-                              {assetDetails?.type && (
-                                <span className={`self-start px-2 py-0.5 rounded-full text-xs mt-1 ${getAssetTypeColor(assetDetails.type)}`}>
-                                  {assetDetails.type === 'stock' ? 'Ação' : ''}
-                                  {assetDetails.type === 'forex' ? 'Forex' : ''}
-                                  {assetDetails.type === 'crypto' ? 'Cripto' : ''}
-                                  {assetDetails.type === 'index' ? 'Índice' : ''}
-                                  {assetDetails.type === 'cfd' ? 'CFD' : ''}
-                                </span>
                               )}
                             </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                            <button 
+                              onClick={() => handleToggleFavorite(assetId)} 
+                              className="p-2 text-red-500 hover:bg-red-900 rounded-full transition-colors"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                      {favoriteAssets.length === 0 && (
+                        <div className="col-span-full p-4 bg-gray-800 rounded-lg text-center">
+                          <p className="text-gray-400">Você ainda não adicionou nenhum ativo aos favoritos.</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Últimos Sinais */}

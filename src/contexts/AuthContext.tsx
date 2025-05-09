@@ -248,30 +248,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthLoading(true);
     try {
       console.log('Enviando para o Supabase:', updatedFavorites);
+      
+      // Atualiza o user_metadata no Supabase
       const { data, error } = await supabase.auth.updateUser({
         data: { favorites: updatedFavorites }
       });
 
       if (error) {
-        console.error('Erro ao atualizar favoritos no Supabase:', error);
-        alert(`Erro ao atualizar favoritos: ${error.message}`);
+        console.error('Erro ao atualizar favoritos:', error.message);
+        // Revertemos ao estado anterior em caso de erro
         return;
       }
 
+      // Se a atualização foi bem-sucedida, atualiza o estado local
       if (data.user) {
-        // Atualizar o estado local com os dados retornados pelo Supabase
-        console.log('Favorites atualizados com sucesso no Supabase:', data.user.user_metadata.favorites);
-        const newUser = mapSupabaseUserToAppUser(data.user);
-        setUser(newUser);
-      } else {
-        // Fallback: atualizar o estado local diretamente
-        console.log('Atualizando estado local com favorites:', updatedFavorites);
-        setUser((prevUser: User | null) => prevUser ? { ...prevUser, favorites: updatedFavorites } : null);
+        console.log('Favoritos atualizados com sucesso!', data.user.user_metadata?.favorites);
+        
+        // Atualiza o estado local do usuário com os favoritos atualizados
+        setUser(prevUser => {
+          if (!prevUser) return null;
+          return {
+            ...prevUser,
+            favorites: data.user?.user_metadata?.favorites || updatedFavorites
+          };
+        });
       }
-
     } catch (error: any) {
-      console.error('Erro ao atualizar favoritos:', error);
-      alert(`Ocorreu um erro ao atualizar favoritos: ${error.message || 'Erro desconhecido'}`);
+      console.error('Erro ao alternar favorito:', error.message);
+      alert('Ocorreu um erro ao atualizar seus favoritos. Tente novamente.');
     } finally {
       setAuthLoading(false);
     }
