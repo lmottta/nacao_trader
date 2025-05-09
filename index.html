@@ -8,18 +8,24 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Carrega as configurações do Supabase antes de qualquer script -->
+    <script src="/supabase/env.js"></script>
     <script type="text/javascript">
       // Script de diagnóstico que executa antes de qualquer outro JavaScript
       window.supabaseCheck = {
         envCheck: function() {
           console.log('Verificando variáveis de ambiente no index.html...');
+          const config = window.SUPABASE_CONFIG || {};
           return {
             timestamp: new Date().toISOString(),
-            hasViteEnv: typeof window.env !== 'undefined'
+            hasSupabaseConfig: !!window.SUPABASE_CONFIG,
+            supabaseUrl: config.SUPABASE_URL ? 'Definido' : 'Indefinido',
+            supabaseKey: config.SUPABASE_ANON_KEY ? 'Definido' : 'Indefinido'
           };
         }
       };
       window.supabaseCheck.result = window.supabaseCheck.envCheck();
+      console.log('Verificação Supabase:', window.supabaseCheck.result);
     </script>
   </head>
   <body>

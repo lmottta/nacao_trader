@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "postbuild": "cp -r public/supabase dist/ || xcopy /E /I /Y public\\supabase dist\\supabase 2>/dev/null || true",
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "vite preview --host --port $PORT"
