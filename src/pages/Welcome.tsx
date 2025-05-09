@@ -8,7 +8,7 @@ const testimonials = [
   {
     name: 'Lucas Andrade',
     avatar: 'https://randomuser.me/api/portraits/men/32.jpg',
-    text: 'Com os sinais Ambus, finalmente consegui consistência e confiança nas minhas operações. Recomendo para todo trader sério!',
+    text: 'Com os sinais NAÇÃO TRADER, finalmente consegui consistência e confiança nas minhas operações. Recomendo para todo trader sério!',
     result: '+R$ 4.200 em 2 meses'
   },
   {
@@ -20,14 +20,14 @@ const testimonials = [
   {
     name: 'Carlos Lima',
     avatar: 'https://randomuser.me/api/portraits/men/65.jpg',
-    text: 'Nunca imaginei que IA pudesse ser tão útil no day trade. O Ambus mudou meu jogo!',
+    text: 'Nunca imaginei que IA pudesse ser tão útil no day trade. O NAÇÃO TRADER mudou meu jogo!',
     result: 'ROI: 3,1x em 6 semanas'
   }
 ];
 
 const faqs = [
   {
-    q: 'Preciso ter experiência para usar o Ambus?',
+    q: 'Preciso ter experiência para usar o NAÇÃO TRADER?',
     a: 'Não! Nossa plataforma é intuitiva e pensada para todos os níveis. Você recebe sinais claros e pode aprender com a comunidade.'
   },
   {
@@ -333,14 +333,14 @@ const Welcome: React.FC = () => {
       {/* DEPOIMENTOS */}
       <div className="bg-[#101820] py-16 px-4">
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-2xl font-bold mb-10 text-center text-[#FFD700]">O que dizem os traders Ambus</h2>
+          <h2 className="text-2xl font-bold mb-10 text-center text-[#FFD700]">O que dizem os traders NAÇÃO TRADER</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {testimonials.map((t, i) => (
               <div key={i} className="bg-[#181818] rounded-xl p-6 shadow-lg border border-[#222] flex flex-col items-center text-center">
                 <img src={t.avatar} alt={t.name} className="w-16 h-16 rounded-full mb-3 border-2 border-[#00FF85] object-cover" />
                 <h3 className="font-semibold text-lg text-white mb-1">{t.name}</h3>
                 <span className="text-xs text-[#FFD700] mb-2">{t.result}</span>
-                <p className="text-gray-300 text-sm">“{t.text}”</p>
+                <p className="text-gray-300 text-sm">"{t.text}"</p>
               </div>
             ))}
           </div>
