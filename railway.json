@@ -15,6 +15,10 @@
       "production": "production",
       "staging": "staging",
       "development": "development"
-    }
+    },
+    "VITE_SUPABASE_URL": "ref:VITE_SUPABASE_URL",
+    "VITE_SUPABASE_ANON_KEY": "ref:VITE_SUPABASE_ANON_KEY",
+    "VITE_FINNHUB_API_KEY": "ref:VITE_FINNHUB_API_KEY",
+    "VITE_SUPABASE_SERVICE_ROLE_KEY": "ref:VITE_SUPABASE_SERVICE_ROLE_KEY"
   }
 } 
