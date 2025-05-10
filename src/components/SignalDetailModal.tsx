@@ -8,6 +8,8 @@ import {
 import { Asset } from '../contexts/AssetContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserOperationsHistory, NewUserOperationData } from '../contexts/UserOperationsHistoryContext';
+import { formatIndicator, getIndicatorColor } from '../utils/indicatorFormatter';
+import { SignalIndicatorsList } from './SignalIndicator';
 
 interface TimeSlot {
   time: Date;
@@ -360,32 +362,17 @@ const SignalDetailModal: React.FC<SignalDetailModalProps> = ({
                   
                   {/* Exibir indicadores técnicos */}
                   {signal.indicators && Object.keys(signal.indicators).length > 0 && (
-                    <ul className="space-y-1.5">
-                      {Object.entries(signal.indicators).map(([key, value]: [string, any]) => (
-                        <li key={key} className="flex items-start">
-                          <CircleDot className="text-[#00FF85] mr-2 mt-0.5" size={14} />
-                          <div>
-                            <span className="text-gray-300">{key.replace(/_/g, ' ')}: </span>
-                            <span className="text-white">{typeof value === 'object' ? JSON.stringify(value) : value}</span>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="mb-3">
+                      <SignalIndicatorsList indicators={signal.indicators} />
+                    </div>
                   )}
                   
                   {/* Exibir indicadores de dentro do objeto details, se houver */}
                   {signal.details?.indicators && Object.keys(signal.details.indicators).length > 0 && (
-                    <ul className="space-y-1.5">
-                      {Object.entries(signal.details.indicators).map(([key, value]: [string, any]) => (
-                        <li key={key} className="flex items-start">
-                          <CircleDot className="text-[#00FF85] mr-2 mt-0.5" size={14} />
-                          <div>
-                            <span className="text-gray-300">{key.replace(/_/g, ' ')}: </span>
-                            <span className="text-white">{typeof value === 'object' ? JSON.stringify(value) : value}</span>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
+                    <div>
+                      <h4 className="text-sm font-medium text-white mb-2 mt-1">Detalhamento Adicional:</h4>
+                      <SignalIndicatorsList indicators={signal.details.indicators} />
+                    </div>
                   )}
                 </div>
               </div>

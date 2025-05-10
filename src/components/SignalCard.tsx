@@ -6,6 +6,8 @@ import { Asset } from '../contexts/AssetContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserOperationsHistory, NewUserOperationData } from '../contexts/UserOperationsHistoryContext';
 import { supabase } from '../lib/supabaseClient';
+import { formatIndicator, getIndicatorColor } from '../utils/indicatorFormatter';
+import { SignalIndicatorsList } from './SignalIndicator';
 
 interface SignalCardProps {
   signal: {
@@ -418,6 +420,18 @@ const SignalCard: React.FC<SignalCardProps> = ({ signal, asset, className = '' }
           </div>
         )}
       </div>
+
+      {/* Exibição compacta dos indicadores - antes do botão de ação */}
+      {signal.indicators && Object.keys(signal.indicators).length > 0 && (
+        <div className="mt-2 mb-3 pt-2 border-t border-[#252525]">
+          <SignalIndicatorsList 
+            indicators={signal.indicators} 
+            compact={true} 
+            maxItems={3} 
+            className="grid grid-cols-1 gap-y-1" 
+          />
+        </div>
+      )}
 
       {/* Botão de Ação */}
       <button 

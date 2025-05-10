@@ -19,6 +19,9 @@ load_dotenv()
 # Singleton do cliente Supabase
 _supabase_client = None
 
+# Adicionar a importação do normalizador no início do arquivo (após as importações existentes)
+from .indicator_normalizer import normalize_indicators
+
 def get_supabase_client() -> Client:
     """
     Obtém uma instância singleton do cliente Supabase.
@@ -311,18 +314,25 @@ class SupabaseHelper:
             signal_data: Dados do sinal a ser criado
             
         Returns:
-            Sinal criado
+            Dict contendo o sinal criado ou os detalhes do erro
         """
         try:
-            response = self.client.table("signals").insert(signal_data).execute()
+            # Normalizando indicadores para garantir formato consistente
+            if signal_data.get("indicators"):
+                signal_data["indicators"] = normalize_indicators(signal_data["indicators"])
             
-            if not response.data or len(response.data) == 0:
-                raise ValueError("Nenhum sinal foi criado")
+            # Também normalizar indicadores dentro de 'details', se existirem
+            if signal_data.get("details") and signal_data["details"].get("indicators"):
+                signal_data["details"]["indicators"] = normalize_indicators(signal_data["details"]["indicators"])
             
-            return response.data[0]
+            response = await self.client.table("signals").insert(signal_data).execute()
+            
+            if hasattr(response, 'data') and response.data:
+                return response.data[0]
+            return {"error": "Erro ao criar sinal", "details": str(response)}
         except Exception as e:
-            logger.error(f"Erro ao criar sinal no Supabase: {e}")
-            raise
+            logger.error(f"Erro ao criar sinal: {e}")
+            return {"error": str(e)}
     
     async def update_signal(self, signal_id: str, signal_data: Dict[str, Any]) -> Dict[str, Any]:
         """

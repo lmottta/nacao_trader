@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import SignalCard from '../components/SignalCard';
@@ -11,7 +11,7 @@ import FloatingAnalysis from '../components/FloatingAnalysis';
 import FloatingOperations from '../components/FloatingOperations';
 import OperationResults from '../components/OperationResults';
 import SideMenu from '../components/SideMenu';
-import { Filter, CalendarDays, Clock3, Plus, ChevronUp, ChevronDown, RefreshCw, WifiOff, ChevronLeft, ChevronRight, BarChart3, LayoutGrid, LayoutList, Columns, Download, HelpCircle, X } from 'lucide-react';
+import { Filter, CalendarDays, Clock3, Plus, ChevronUp, ChevronDown, RefreshCw, WifiOff, ChevronLeft, ChevronRight, BarChart3, LayoutGrid, LayoutList, Columns, Download, HelpCircle, X, Search } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAssets, assetTabs, Asset, Signal } from '../contexts/AssetContext';
 
@@ -47,6 +47,13 @@ function Dashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = viewMode === 'list' ? 15 : viewMode === 'compact' ? 12 : 6;
   
+  // Estados relacionados à busca
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState<string>('');
+  const [isSearching, setIsSearching] = useState<boolean>(false);
+  const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+  
   // Verificar se o dispositivo está online
   useEffect(() => {
     const checkOnlineStatus = () => {
@@ -74,6 +81,33 @@ function Dashboard() {
   useEffect(() => {
     setCurrentPage(1);
   }, [viewMode]);
+
+  // Efeito para aplicar debounce na busca
+  useEffect(() => {
+    setIsSearching(true);
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+      setIsSearching(false);
+    }, 300); // Delay de 300ms
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [searchQuery]);
+
+  // Efeito para detectar cliques fora do menu de sugestões
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const toggleFavorites = () => {
     setFavoritesExpanded(!favoritesExpanded);
@@ -141,6 +175,22 @@ function Dashboard() {
       });
     }
     
+    // Busca pelo termo (usando valor com debounce)
+    if (debouncedSearchQuery.trim() !== '') {
+      const query = debouncedSearchQuery.toLowerCase().trim();
+      signals = signals.filter(signal => {
+        const asset = findAssetForSignal(signal);
+        // Buscar em vários campos relevantes
+        return (
+          (asset?.symbol && asset.symbol.toLowerCase().includes(query)) ||
+          (asset?.name && asset.name.toLowerCase().includes(query)) ||
+          (signal.direction && signal.direction.toLowerCase().includes(query)) ||
+          (signal.notes && signal.notes.toLowerCase().includes(query)) ||
+          (signal.timeframe && signal.timeframe.toLowerCase().includes(query))
+        );
+      });
+    }
+    
     // Ordenar por data de geração (mais recentes primeiro)
     signals.sort((a, b) => {
       const dateA = new Date(a.generated_at || 0).getTime();
@@ -149,7 +199,7 @@ function Dashboard() {
     });
 
     return signals;
-  }, [realtimeSignals, selectedAsset, assetTypeFilter, assets]);
+  }, [realtimeSignals, selectedAsset, assetTypeFilter, assets, debouncedSearchQuery]);
 
   // Cálculo para paginação
   const totalPages = Math.ceil(filteredSignals.length / ITEMS_PER_PAGE);
@@ -249,6 +299,31 @@ function Dashboard() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // Atualizado para mostrar sugestões quando o usuário digita
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+    if (e.target.value.length > 1) {
+      setShowSuggestions(true);
+    } else {
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setDebouncedSearchQuery(searchQuery);
+    setIsSearching(false);
+  };
+
+  // Atualizar o clearFilters
+  const clearFilters = () => {
+    setSearchQuery('');
+    setDebouncedSearchQuery('');
+    setAssetTypeFilter('all');
+    setSelectedAsset('all');
+    setCurrentPage(1);
   };
 
   return (
@@ -354,23 +429,211 @@ function Dashboard() {
                       Exibindo {paginatedSignals.length} de {filteredSignals.length} sinais
                       {assetTypeFilter !== 'all' && ` do tipo ${assetTypeFilter}`}
                       {selectedAsset !== 'all' && ` para ${assets.find(a => a.id === selectedAsset)?.symbol || selectedAsset}`}
+                      {debouncedSearchQuery && ` contendo "${debouncedSearchQuery}"`}
                     </span>
                   )}
                 </div>
-                <div className="flex items-center bg-[#1E1E1E] rounded-lg border border-[#333333] pl-3 shadow-sm">
-                  <Filter size={18} className="text-gray-400 mr-2" />
-                  <select
-                    value={assetTypeFilter}
-                    onChange={(e) => setAssetTypeFilter(e.target.value)}
-                    className="bg-transparent text-gray-300 py-2 pr-3 border-none focus:ring-0 focus:outline-none cursor-pointer appearance-none"
-                  >
-                    <option value="all">Todos tipos</option>
-                    <option value="stock">Ações</option>
-                    <option value="forex">Forex</option>
-                    <option value="crypto">Cripto</option>
-                    <option value="index">Índices</option>
-                    <option value="cfd">CFDs</option>
-                  </select>
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Campo de Busca com Sugestões */}
+                  <div className="relative w-full md:w-auto" ref={searchContainerRef}>
+                    <form onSubmit={handleSearchSubmit} className="flex items-center bg-[#1E1E1E] rounded-lg border border-[#333333] pl-3 shadow-sm w-full">
+                      <Search size={18} className={`mr-2 ${isSearching ? 'text-[#00FF85] animate-pulse' : 'text-gray-400'}`} />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={handleSearchChange}
+                        onFocus={() => searchQuery.length > 1 && setShowSuggestions(true)}
+                        placeholder="Buscar sinais..."
+                        className="bg-transparent text-gray-300 py-2 pr-3 w-full md:w-48 border-none focus:ring-0 focus:outline-none"
+                      />
+                      {searchQuery && (
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            setSearchQuery('');
+                            setDebouncedSearchQuery('');
+                            setShowSuggestions(false);
+                          }}
+                          className="px-2 text-gray-400 hover:text-white"
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
+                    </form>
+                    
+                    {/* Sugestões de Busca */}
+                    {showSuggestions && searchQuery.length > 1 && (
+                      <div className="absolute top-full left-0 w-full z-10 mt-1 bg-[#1A1A1A] border border-[#333333] rounded-lg shadow-lg overflow-hidden max-h-60 overflow-y-auto">
+                        {/* Verifica se existem sugestões para mostrar */}
+                        {(
+                          assets.some(asset => 
+                            asset.symbol?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                            asset.name?.toLowerCase().includes(searchQuery.toLowerCase())
+                          ) ||
+                          ['CALL', 'PUT'].some(dir => 
+                            dir.toLowerCase().includes(searchQuery.toLowerCase())
+                          ) ||
+                          ['RSI', 'MACD', 'BOLLINGER'].some(indicator => 
+                            indicator.toLowerCase().includes(searchQuery.toLowerCase())
+                          )
+                        ) ? (
+                          <>
+                            {/* Título de seção para ativos, se houver correspondências */}
+                            {assets.some(asset => 
+                              asset.symbol?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                              asset.name?.toLowerCase().includes(searchQuery.toLowerCase())
+                            ) && (
+                              <div className="bg-[#151515] text-xs uppercase tracking-wider text-gray-500 px-3 py-1 font-semibold border-b border-[#252525]">
+                                Ativos
+                              </div>
+                            )}
+                            
+                            {/* Sugestões de Ativos */}
+                            {assets.filter(asset => 
+                              asset.symbol?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                              asset.name?.toLowerCase().includes(searchQuery.toLowerCase())
+                            ).slice(0, 5).map(asset => (
+                              <button
+                                key={asset.id}
+                                onClick={() => {
+                                  setSelectedAsset(asset.id); 
+                                  setSearchQuery(asset.symbol || '');
+                                  setDebouncedSearchQuery(asset.symbol || '');
+                                  setShowSuggestions(false);
+                                }}
+                                className="w-full px-3 py-2 text-left hover:bg-[#252525] flex items-center border-b border-[#252525] last:border-0"
+                              >
+                                <div className="flex-1">
+                                  <div className="text-[#00FF85] font-medium">{asset.symbol}</div>
+                                  <div className="text-xs text-gray-400">{asset.name}</div>
+                                </div>
+                                <div className={`text-xs px-2 py-0.5 rounded ${
+                                  asset.type === 'stock' ? 'bg-blue-900/30 text-blue-400' :
+                                  asset.type === 'crypto' ? 'bg-yellow-900/30 text-yellow-400' :
+                                  asset.type === 'forex' ? 'bg-green-900/30 text-green-400' :
+                                  'bg-gray-800 text-gray-400'
+                                }`}>
+                                  {asset.type}
+                                </div>
+                              </button>
+                            ))}
+                            
+                            {/* Título de seção para direções, se houver correspondências */}
+                            {['CALL', 'PUT'].some(dir => 
+                              dir.toLowerCase().includes(searchQuery.toLowerCase())
+                            ) && (
+                              <div className="bg-[#151515] text-xs uppercase tracking-wider text-gray-500 px-3 py-1 font-semibold border-b border-[#252525]">
+                                Direções
+                              </div>
+                            )}
+                            
+                            {/* Sugestões de Direções */}
+                            {['CALL', 'PUT'].filter(dir => 
+                              dir.toLowerCase().includes(searchQuery.toLowerCase()) 
+                            ).map(dir => (
+                              <button
+                                key={dir}
+                                onClick={() => {
+                                  setSearchQuery(dir);
+                                  setDebouncedSearchQuery(dir);
+                                  setShowSuggestions(false);
+                                }}
+                                className="w-full px-3 py-2 text-left hover:bg-[#252525] flex items-center border-b border-[#252525] last:border-0"
+                              >
+                                <div className="flex-1">
+                                  <div className={`font-medium ${dir === 'CALL' ? 'text-green-400' : 'text-red-400'}`}>
+                                    {dir} {dir === 'CALL' ? '(COMPRA)' : '(VENDA)'}
+                                  </div>
+                                </div>
+                                <div className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-400">
+                                  direção
+                                </div>
+                              </button>
+                            ))}
+                            
+                            {/* Título de seção para indicadores, se houver correspondências */}
+                            {['RSI', 'MACD', 'BOLLINGER'].some(indicator => 
+                              indicator.toLowerCase().includes(searchQuery.toLowerCase())
+                            ) && (
+                              <div className="bg-[#151515] text-xs uppercase tracking-wider text-gray-500 px-3 py-1 font-semibold border-b border-[#252525]">
+                                Indicadores
+                              </div>
+                            )}
+                            
+                            {/* Sugestões de Indicadores */}
+                            {[
+                              { id: 'rsi', name: 'RSI', desc: 'Índice de Força Relativa' },
+                              { id: 'macd', name: 'MACD', desc: 'Convergência e Divergência de Médias Móveis' },
+                              { id: 'bollinger', name: 'BOLLINGER', desc: 'Bandas de Bollinger' }
+                            ].filter(indicator => 
+                              indicator.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                              indicator.desc.toLowerCase().includes(searchQuery.toLowerCase())
+                            ).map(indicator => (
+                              <button
+                                key={indicator.id}
+                                onClick={() => {
+                                  setSearchQuery(indicator.name);
+                                  setDebouncedSearchQuery(indicator.name);
+                                  setShowSuggestions(false);
+                                }}
+                                className="w-full px-3 py-2 text-left hover:bg-[#252525] flex items-center border-b border-[#252525] last:border-0"
+                              >
+                                <div className="flex-1">
+                                  <div className="text-blue-400 font-medium">{indicator.name}</div>
+                                  <div className="text-xs text-gray-400">{indicator.desc}</div>
+                                </div>
+                                <div className="text-xs px-2 py-0.5 rounded bg-blue-900/30 text-blue-400">
+                                  indicador
+                                </div>
+                              </button>
+                            ))}
+                          </>
+                        ) : (
+                          // Mensagem se não houver sugestões
+                          <div className="px-3 py-4 text-center text-gray-400 text-sm">
+                            Nenhuma sugestão encontrada. Pressione Enter para buscar.
+                          </div>
+                        )}
+                        
+                        {/* Botão para fechar sugestões */}
+                        <button
+                          onClick={() => setShowSuggestions(false)}
+                          className="w-full px-3 py-2 text-center text-gray-400 text-sm hover:bg-[#252525] border-t border-[#333333]"
+                        >
+                          Fechar sugestões
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Filtro por tipo de ativo */}
+                  <div className="flex items-center bg-[#1E1E1E] rounded-lg border border-[#333333] pl-3 shadow-sm">
+                    <Filter size={18} className="text-gray-400 mr-2" />
+                    <select
+                      value={assetTypeFilter}
+                      onChange={(e) => setAssetTypeFilter(e.target.value)}
+                      className="bg-transparent text-gray-300 py-2 pr-3 border-none focus:ring-0 focus:outline-none cursor-pointer appearance-none"
+                    >
+                      <option value="all">Todos tipos</option>
+                      <option value="stock">Ações</option>
+                      <option value="forex">Forex</option>
+                      <option value="crypto">Cripto</option>
+                      <option value="index">Índices</option>
+                      <option value="cfd">CFDs</option>
+                    </select>
+                  </div>
+                  
+                  {/* Botão para limpar filtros */}
+                  {(searchQuery || assetTypeFilter !== 'all' || selectedAsset !== 'all') && (
+                    <button
+                      onClick={clearFilters}
+                      className="px-3 py-2 text-sm bg-[#252525] hover:bg-[#303030] text-gray-300 rounded-lg flex items-center transition-colors"
+                      title="Limpar todos os filtros"
+                    >
+                      <X size={16} className="mr-1" />
+                      Limpar filtros
+                    </button>
+                  )}
                 </div>
               </div>
               
