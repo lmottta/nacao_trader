@@ -1,7 +1,7 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
-// import { mockAssets } from '../data/mockData'; // Remover import do mock
 import { supabase } from '../lib/supabaseClient';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { getMarketData } from '../services/marketDataService';
 
 // Definição dos tipos de ativos disponíveis
 export const assetTabs = [
@@ -78,7 +78,8 @@ interface AssetContextType {
   setTypeFilter: (type: string) => void;
   refreshAssets: () => Promise<void>;
   getTabFromAssetType: (type: string) => string;
-  realtimeSignals: Signal[]; // Adicionar estado para sinais
+  realtimeSignals: Signal[];
+  signalsForActiveTab: Signal[];
   realtimeStatus: RealtimeStatus;
   reconnectRealtime: () => void;
 }
@@ -100,7 +101,8 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
-  const [realtimeSignals, setRealtimeSignals] = useState<Signal[]>([]); // Novo estado para sinais
+  const [allSignals, setAllSignals] = useState<Signal[]>([]);
+  const [realtimeSignals, setRealtimeSignals] = useState<Signal[]>([]); // Sinais em tempo real
   const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>({
     assets: 'connecting',
     signals: 'connecting'
@@ -108,11 +110,43 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   
   const assetsChannelRef = React.useRef<RealtimeChannel | null>(null);
   const signalsChannelRef = React.useRef<RealtimeChannel | null>(null); // Ref para canal de sinais
+  const updateIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
 
   // Função para mapear um tipo de ativo para sua aba correspondente
   const getTabFromAssetType = (type: string): string => {
     return assetTypeToTabMapping[type.toLowerCase()] || 'FTT';
   };
+
+  // Função para atualizar os preços dos ativos
+  const updateAssetPrices = useCallback(async (assetsToUpdate: Asset[]) => {
+    console.log(`Iniciando atualização de preços para ${assetsToUpdate.length} ativos...`);
+    const updatedAssets = await Promise.all(
+      assetsToUpdate.map(async (asset) => {
+        const marketData = await getMarketData(asset.symbol);
+        if (marketData) {
+          return {
+            ...asset,
+            last_price: marketData.price,
+            last_update: new Date().toISOString(),
+            marketStatus: marketData.source === 'Finnhub' ? (marketData.price > 0 ? 'open' : 'closed') : asset.marketStatus,
+          };
+        }
+        return asset;
+      })
+    );
+
+    setAssets(currentAssets => {
+      const newAssets = [...currentAssets];
+      updatedAssets.forEach(updatedAsset => {
+        const index = newAssets.findIndex(a => a.id === updatedAsset.id);
+        if (index !== -1) {
+          newAssets[index] = updatedAsset;
+        }
+      });
+      return newAssets;
+    });
+
+  }, []);
 
   // Buscar ativos do Supabase
   const fetchAssets = useCallback(async () => {
@@ -160,8 +194,42 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } finally {
       setLoading(false);
       console.log("Busca de ativos finalizada.");
+
+      // Iniciar a atualização de preços em tempo real
+      if (formattedAssets.length > 0) {
+        if (updateIntervalRef.current) {
+          clearInterval(updateIntervalRef.current);
+        }
+        updateAssetPrices(formattedAssets);
+        updateIntervalRef.current = setInterval(() => updateAssetPrices(formattedAssets), 60000); // Atualiza a cada 60 segundos
+      }
+
     }
-  }, []); // useCallback para evitar recriação desnecessária
+  }, [updateAssetPrices]); // useCallback para evitar recriação desnecessária
+
+  // Buscar sinais iniciais do Supabase
+  const fetchInitialSignals = useCallback(async () => {
+    console.log("Buscando sinais iniciais do Supabase...");
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('signals')
+        .select('*')
+        .order('generated_at', { ascending: false });
+
+      if (fetchError) {
+        console.error('Erro ao buscar sinais iniciais:', fetchError);
+        throw new Error('Falha ao carregar sinais do banco de dados.');
+      }
+
+      if (data) {
+        console.log(`Foram encontrados ${data.length} sinais iniciais.`);
+        setAllSignals(data);
+      }
+    } catch (err: any) {
+      console.error('Erro detalhado ao buscar sinais:', err);
+      setError(err.message || 'Ocorreu um erro desconhecido ao buscar sinais.');
+    }
+  }, []);
 
   // Buscar sinais do Supabase
   const fetchSignals = useCallback(async () => {
@@ -198,10 +266,30 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       supabase.removeChannel(assetsChannelRef.current);
       assetsChannelRef.current = null;
     }
+    if (updateIntervalRef.current) {
+        clearInterval(updateIntervalRef.current);
+    }
     if (signalsChannelRef.current) {
       supabase.removeChannel(signalsChannelRef.current);
       signalsChannelRef.current = null;
     }
+
+    // Canal para atualizações de SINAIS
+    signalsChannelRef.current = supabase
+      .channel('public:signals')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'signals' }, (payload) => {
+        console.log('Novo sinal recebido!', payload.new);
+        setRealtimeSignals(currentSignals => [payload.new as Signal, ...currentSignals]);
+      })
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('Conectado ao canal de sinais.');
+          setRealtimeStatus(prev => ({ ...prev, signals: 'connected' }));
+        } else if (status === 'CHANNEL_ERROR' || err) {
+          console.error('Erro no canal de sinais:', err);
+          setRealtimeStatus(prev => ({ ...prev, signals: 'error' }));
+        }
+      });
 
     // Configurar canal para assets
     console.log('Configurando Supabase Realtime para tabela assets...');
@@ -304,7 +392,8 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Efeito para carregar dados e configurar Realtime na inicialização
   useEffect(() => {
-    fetchAssets(); // Busca inicial de ativos
+    fetchAssets();
+    fetchInitialSignals(); // Buscar sinais ao carregar
     fetchSignals(); // Busca inicial de sinais
     setupRealtimeChannels(); // Configurar Realtime
 
@@ -320,7 +409,7 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         signalsChannelRef.current = null;
       }
     };
-  }, [fetchAssets, fetchSignals, setupRealtimeChannels]);
+  }, [fetchAssets, fetchInitialSignals, fetchSignals, setupRealtimeChannels]);
 
   // Adicionar um efeito para exibir mensagem de reconexão quando o status dos canais mudar
   useEffect(() => {
@@ -350,6 +439,33 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   // Filtragem de ativos baseada no tipo, aba ativa e termo de busca
+  // Combina sinais iniciais e em tempo real
+  const combinedSignals = React.useMemo(() => {
+    const allSignalsMap = new Map<string, Signal>();
+
+    // Adiciona sinais iniciais ao mapa
+    allSignals.forEach(signal => allSignalsMap.set(signal.id, signal));
+
+    // Adiciona ou atualiza com sinais em tempo real
+    realtimeSignals.forEach(signal => allSignalsMap.set(signal.id, signal));
+
+    return Array.from(allSignalsMap.values());
+  }, [allSignals, realtimeSignals]);
+
+  // Filtra os sinais para a aba ativa
+  const signalsForActiveTab = React.useMemo(() => {
+    if (activeTab === 'ALL') {
+      return combinedSignals;
+    }
+    // Encontra os ativos que pertencem à aba ativa
+    const assetsInTab = assets.filter(asset => getTabFromAssetType(asset.type) === activeTab);
+    const assetSymbolsInTab = new Set(assetsInTab.map(a => a.symbol));
+
+    // Filtra os sinais com base nos símbolos dos ativos
+    return combinedSignals.filter(signal => assetSymbolsInTab.has(signal.asset_symbol || ''));
+
+  }, [combinedSignals, assets, activeTab, getTabFromAssetType]);
+
   const filteredAssets = assets.filter(asset => {
     // Mapeamento do tipo de ativo para a aba
     const assetTab = getTabFromAssetType(asset.type);
@@ -384,7 +500,8 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setTypeFilter,
         refreshAssets,
         getTabFromAssetType,
-        realtimeSignals,
+        realtimeSignals: combinedSignals, // Usar sinais combinados
+        signalsForActiveTab, // Passar sinais filtrados
         realtimeStatus,
         reconnectRealtime
       }}
@@ -392,4 +509,4 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       {children}
     </AssetContext.Provider>
   );
-}; 
+};

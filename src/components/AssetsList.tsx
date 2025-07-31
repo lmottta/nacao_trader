@@ -179,7 +179,8 @@ const AssetsList: React.FC<AssetsListProps> = ({ className = '' }) => {
     typeFilter,
     setTypeFilter,
     assets,
-    getTabFromAssetType
+    getTabFromAssetType,
+    signalsForActiveTab
   } = useAssets();
 
   const [marketStatusFilter, setMarketStatusFilter] = useState<string>('all');
@@ -283,6 +284,21 @@ const AssetsList: React.FC<AssetsListProps> = ({ className = '' }) => {
     }
     return filteredAssets.filter(asset => asset.type.toLowerCase() === assetType.toLowerCase()).length;
   };
+
+  // Mapear sinais para os ativos para acesso rápido
+  const signalsByAssetSymbol = React.useMemo(() => {
+    const map = new Map<string, any[]>();
+    signalsForActiveTab.forEach(signal => {
+      const assetSymbol = signal.asset_symbol;
+      if (assetSymbol) {
+        if (!map.has(assetSymbol)) {
+          map.set(assetSymbol, []);
+        }
+        map.get(assetSymbol)?.push(signal);
+      }
+    });
+    return map;
+  }, [signalsForActiveTab]);
 
   // Filtragem adicional por status de mercado
   const filteredAssetsByStatus = filteredAssets.filter(asset => {
@@ -407,7 +423,16 @@ const AssetsList: React.FC<AssetsListProps> = ({ className = '' }) => {
                       <MarketStatusBadge status={asset.marketStatus} />
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-gray-300">{asset.name}</td>
+                  <td className="px-4 py-3 text-gray-300">
+                    {asset.name}
+                    {/* Exibir informações do sinal se existir */}
+                    {signalsByAssetSymbol.has(asset.symbol) && (
+                      <div className="text-xs text-blue-400 mt-1 flex items-center gap-1">
+                        <Zap size={12} />
+                        <span>Sinal Ativo</span>
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <span className={`
                       px-2 py-1 rounded-full text-xs 
@@ -454,4 +479,4 @@ const AssetsList: React.FC<AssetsListProps> = ({ className = '' }) => {
   );
 };
 
-export default AssetsList; 
+export default AssetsList;
