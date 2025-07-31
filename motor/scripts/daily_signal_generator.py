@@ -286,7 +286,8 @@ async def create_signal(asset: Dict[str, Any], force_direction: Optional[str] = 
 async def generate_daily_signals(
     min_signals: int = 10, 
     max_signals: int = 20,
-    force_otc: bool = False
+    force_otc: bool = False,
+    force: bool = False
 ) -> Dict[str, Any]:
     """
     Gera sinais diários para ativos disponíveis.
@@ -303,14 +304,17 @@ async def generate_daily_signals(
         # Verificar sinais existentes para hoje
         existing_count = await check_existing_signals()
         
-        # Se já temos sinais suficientes, não gerar novos
-        if existing_count >= min_signals:
+        # Se já temos sinais suficientes e não estamos forçando, não gerar novos
+        if existing_count >= min_signals and not force:
             logger.info(f"Já existem {existing_count} sinais hoje, não é necessário gerar novos.")
             return {
                 "status": "skipped",
                 "existing_signals": existing_count,
                 "new_signals": 0
             }
+        
+        if force:
+            logger.info("Opção --force ativada. Gerando novos sinais independentemente dos existentes.")
         
         # Obter todos os ativos
         assets = await get_assets_from_supabase()
@@ -477,6 +481,7 @@ async def main():
     parser.add_argument("--max", type=int, default=25, help="Número máximo de sinais a gerar")
     parser.add_argument("--force-otc", action="store_true", help="Forçar sinais como OTC")
     parser.add_argument("--update-prices", action="store_true", help="Atualizar preços dos ativos")
+    parser.add_argument("--force", action="store_true", help="Forçar a geração de novos sinais mesmo que já existam")
     args = parser.parse_args()
     
     logger.info("=== Iniciando gerador diário de sinais ===")
@@ -491,7 +496,8 @@ async def main():
     result = await generate_daily_signals(
         min_signals=args.min,
         max_signals=args.max,
-        force_otc=args.force_otc
+        force_otc=args.force_otc,
+        force=args.force
     )
     
     logger.info(f"Resultado da geração de sinais: {result}")
@@ -500,4 +506,4 @@ async def main():
     return result
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    asyncio.run(main())

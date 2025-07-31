@@ -196,12 +196,36 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       console.log("Busca de ativos finalizada.");
 
       // Iniciar a atualização de preços em tempo real
-      if (formattedAssets.length > 0) {
+      if (data && data.length > 0) {
+        const assetsToUpdate: Asset[] = data.map(asset => ({
+          id: asset.id || asset.symbol,
+          symbol: asset.symbol,
+          name: asset.name,
+          type: asset.asset_type || 'stock',
+          description: asset.description,
+          last_price: asset.last_price,
+          last_update: asset.last_update,
+          ticker: asset.ticker || asset.symbol,
+          marketStatus: asset.market_status || null,
+          marketStatusSource: asset.market_status_source || null,
+          lastStatusUpdate: asset.last_status_update || null,
+        }));
+
+        setAssets(assetsToUpdate);
+        updateAssetPrices(assetsToUpdate);
+
         if (updateIntervalRef.current) {
           clearInterval(updateIntervalRef.current);
         }
-        updateAssetPrices(formattedAssets);
-        updateIntervalRef.current = setInterval(() => updateAssetPrices(formattedAssets), 60000); // Atualiza a cada 60 segundos
+        updateIntervalRef.current = setInterval(() => {
+          // Acessa o estado mais recente dos ativos para a atualização
+          setAssets(currentAssets => {
+            updateAssetPrices(currentAssets);
+            return currentAssets; // Retorna o estado inalterado, pois a atualização é assíncrona
+          });
+        }, 60000); // Atualiza a cada 60 segundos
+      } else {
+        setAssets([]);
       }
 
     }
@@ -397,9 +421,19 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     fetchSignals(); // Busca inicial de sinais
     setupRealtimeChannels(); // Configurar Realtime
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('Aba se tornou visível, atualizando dados...');
+        refreshAssets();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     // Limpeza ao desmontar
     return () => {
-      console.log('Removendo inscrição dos canais Realtime.');
+      console.log('Removendo inscrição dos canais Realtime e event listener.');
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (assetsChannelRef.current) {
         supabase.removeChannel(assetsChannelRef.current);
         assetsChannelRef.current = null;
