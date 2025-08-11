@@ -1,0 +1,245 @@
+# Regras de alerta para o sistema Nação Trader
+groups:
+  # Alertas de Sistema
+  - name: system_alerts
+    rules:
+      - alert: HighCPUUsage
+        expr: cpu_usage_percent > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "Alto uso de CPU detectado"
+          description: "O uso de CPU está em {{ $value }}% por mais de 5 minutos"
+
+      - alert: HighMemoryUsage
+        expr: memory_usage_percent > 85
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "Alto uso de memória detectado"
+          description: "O uso de memória está em {{ $value }}% por mais de 5 minutos"
+
+      - alert: CriticalMemoryUsage
+        expr: memory_usage_percent > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Uso crítico de memória"
+          description: "O uso de memória está em {{ $value }}% - ação imediata necessária"
+
+  # Alertas de Coleta de Dados
+  - name: data_collection_alerts
+    rules:
+      - alert: HighAPIFailureRate
+        expr: |
+          (
+            rate(api_calls_total{status="error"}[5m]) / 
+            rate(api_calls_total[5m])
+          ) * 100 > 20
+        for: 3m
+        labels:
+          severity: warning
+          component: data_collection
+        annotations:
+          summary: "Alta taxa de falha em APIs"
+          description: "Taxa de falha de {{ $value }}% nas chamadas de API para {{ $labels.provider }}"
+
+      - alert: APIResponseTimeHigh
+        expr: api_response_time{quantile="0.95"} > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: data_collection
+        annotations:
+          summary: "Tempo de resposta alto da API"
+          description: "95% das chamadas para {{ $labels.provider }} estão levando mais de 5 segundos"
+
+      - alert: NoDataCollection
+        expr: increase(api_calls_total[10m]) == 0
+        for: 10m
+        labels:
+          severity: critical
+          component: data_collection
+        annotations:
+          summary: "Coleta de dados parou"
+          description: "Nenhuma chamada de API foi registrada nos últimos 10 minutos"
+
+      - alert: CollectorDown
+        expr: up{job="nacao-trader-collectors"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: data_collection
+        annotations:
+          summary: "Coletor de dados offline"
+          description: "O serviço de coleta de dados está offline"
+
+  # Alertas de Circuit Breaker
+  - name: circuit_breaker_alerts
+    rules:
+      - alert: CircuitBreakerOpen
+        expr: circuit_breaker_state{state="open"} == 1
+        for: 1m
+        labels:
+          severity: warning
+          component: circuit_breaker
+        annotations:
+          summary: "Circuit Breaker aberto"
+          description: "Circuit breaker {{ $labels.name }} está aberto"
+
+      - alert: CircuitBreakerHighFailureRate
+        expr: |
+          (
+            rate(circuit_breaker_operations_total{result="failure"}[5m]) /
+            rate(circuit_breaker_operations_total[5m])
+          ) * 100 > 50
+        for: 3m
+        labels:
+          severity: warning
+          component: circuit_breaker
+        annotations:
+          summary: "Alta taxa de falha no Circuit Breaker"
+          description: "Circuit breaker {{ $labels.name }} tem {{ $value }}% de falhas"
+
+  # Alertas de Cache
+  - name: cache_alerts
+    rules:
+      - alert: LowCacheHitRate
+        expr: |
+          (
+            rate(cache_operations_total{operation="hit"}[10m]) /
+            rate(cache_operations_total[10m])
+          ) * 100 < 30
+        for: 5m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Taxa de acerto do cache baixa"
+          description: "Cache {{ $labels.level }} tem apenas {{ $value }}% de acertos"
+
+      - alert: CacheSizeHigh
+        expr: cache_size_bytes > 1073741824  # 1GB
+        for: 5m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Tamanho do cache alto"
+          description: "Cache {{ $labels.level }} está usando {{ $value | humanize1024 }}B"
+
+  # Alertas de Sinais de Trading
+  - name: trading_signals_alerts
+    rules:
+      - alert: NoSignalsGenerated
+        expr: increase(signals_generated_total[30m]) == 0
+        for: 30m
+        labels:
+          severity: warning
+          component: trading_signals
+        annotations:
+          summary: "Nenhum sinal de trading gerado"
+          description: "Nenhum sinal foi gerado nos últimos 30 minutos"
+
+      - alert: LowSignalConfidence
+        expr: signal_confidence{quantile="0.5"} < 0.6
+        for: 10m
+        labels:
+          severity: warning
+          component: trading_signals
+        annotations:
+          summary: "Baixa confiança nos sinais"
+          description: "Confiança mediana dos sinais está em {{ $value }}"
+
+      - alert: HighSignalVolume
+        expr: rate(signals_generated_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: info
+          component: trading_signals
+        annotations:
+          summary: "Alto volume de sinais"
+          description: "Gerando {{ $value }} sinais por segundo"
+
+  # Alertas de Performance
+  - name: performance_alerts
+    rules:
+      - alert: SlowFunctionExecution
+        expr: function_execution_time{quantile="0.95"} > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: performance
+        annotations:
+          summary: "Execução lenta de função"
+          description: "Função {{ $labels.function_name }} está levando {{ $value }}s para executar"
+
+      - alert: HighErrorRate
+        expr: |
+          (
+            rate(function_errors_total[5m]) /
+            rate(function_calls_total[5m])
+          ) * 100 > 10
+        for: 3m
+        labels:
+          severity: warning
+          component: performance
+        annotations:
+          summary: "Alta taxa de erro"
+          description: "{{ $value }}% das chamadas estão falhando"
+
+  # Alertas de Conectividade
+  - name: connectivity_alerts
+    rules:
+      - alert: ExternalAPIDown
+        expr: probe_success{job="blackbox"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: connectivity
+        annotations:
+          summary: "API externa indisponível"
+          description: "API {{ $labels.instance }} está indisponível"
+
+      - alert: DatabaseConnectionIssue
+        expr: database_connections_active / database_connections_max > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Alto uso de conexões do banco"
+          description: "Usando {{ $value | humanizePercentage }} das conexões disponíveis"
+
+  # Alertas de Negócio
+  - name: business_alerts
+    rules:
+      - alert: UnusualTradingVolume
+        expr: |
+          (
+            rate(signals_generated_total{signal_type="buy"}[1h]) +
+            rate(signals_generated_total{signal_type="sell"}[1h])
+          ) > 100
+        for: 10m
+        labels:
+          severity: info
+          component: business
+        annotations:
+          summary: "Volume de trading incomum"
+          description: "Volume de sinais acima do normal: {{ $value }} por hora"
+
+      - alert: MarketDataStale
+        expr: time() - market_data_last_update > 300  # 5 minutos
+        for: 1m
+        labels:
+          severity: warning
+          component: business
+        annotations:
+          summary: "Dados de mercado desatualizados"
+          description: "Últimos dados de mercado são de {{ $value | humanizeDuration }} atrás"

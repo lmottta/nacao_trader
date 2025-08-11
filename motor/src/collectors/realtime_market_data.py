@@ -15,10 +15,13 @@ from typing import Dict, List, Optional, Union, Any, Tuple
 import pandas as pd
 import numpy as np
 import yfinance as yf
-from loguru import logger
+from src.utils.logger import setup_logger
+
+logger = setup_logger("realtime_market_data", "realtime_market_data.log")
 
 from src.utils.config import settings
 from src.utils.supabase_client import get_supabase_client, refresh_supabase_connection
+from src.processors import signal_generator
 from src.collectors.asset_list import (
     ALL_ASSETS, 
     get_symbols_by_category, 
@@ -377,24 +380,55 @@ def get_realtime_market_data() -> RealtimeMarketData:
 
 async def run_realtime_collector():
     """
-    Ponto de entrada para execução do coletor em tempo real.
+    Ponto de entrada para execução do coletor em tempo real e acionamento da geração de sinais.
     """
     collector = get_realtime_market_data()
-    
+
     # Inicializar tabela de ativos
     await collector.initialize_assets_table()
-    
-    # Ativar monitoramento de todos os ativos
+
     all_symbols = [asset[0] for asset in ALL_ASSETS]
-    collector.active_symbols.update(all_symbols)
     
-    # Iniciar monitoramento contínuo
-    try:
-        await collector.monitor_active_symbols(interval=60)  # 1 minuto
-    except KeyboardInterrupt:
-        logger.info("Coleta em tempo real interrompida pelo usuário")
-    except Exception as e:
-        logger.error(f"Erro durante coleta em tempo real: {e}")
+    logger.info(f"Iniciando monitoramento para {len(all_symbols)} ativos...")
+    
+    last_signal_generation_time = 0
+    signal_generation_interval = 300  # 5 minutos
+
+    while True:
+        try:
+            current_time = time.time()
+            logger.info("Iniciando novo ciclo de coleta...")
+            
+            # Obter dados em tempo real para todos os ativos
+            realtime_data = await collector.get_bulk_realtime_prices(all_symbols)
+            
+            # Salvar dados no Supabase
+            for symbol, data in realtime_data.items():
+                if 'error' not in data and data.get('last_price'):
+                    await collector.save_realtime_data(data)
+                else:
+                    logger.warning(f"Não foi possível salvar dados para {symbol}: {data.get('error', 'Dados ausentes')}")
+
+            # Acionar geração de sinais periodicamente
+            if current_time - last_signal_generation_time > signal_generation_interval:
+                logger.info("Acionando a geração de sinais...")
+                try:
+                    await signal_generator.main(realtime_data)
+                    last_signal_generation_time = current_time
+                    logger.info("Geração de sinais concluída com sucesso.")
+                except Exception as e:
+                    logger.error(f"Erro ao executar a geração de sinais: {e}")
+
+            logger.info(f"Ciclo de coleta concluído. Próximo ciclo em {settings.REALTIME_COLLECTION_INTERVAL} segundos.")
+            await asyncio.sleep(settings.REALTIME_COLLECTION_INTERVAL)
+            
+        except KeyboardInterrupt:
+            logger.info("Coleta em tempo real interrompida pelo usuário")
+            break
+        except Exception as e:
+            logger.error(f"Erro no loop principal do coletor: {e}")
+            logger.error("Aguardando 60 segundos antes de tentar novamente...")
+            await asyncio.sleep(60)
 
 
 if __name__ == "__main__":
@@ -415,4 +449,4 @@ if __name__ == "__main__":
         print("Interrompido pelo usuário. Encerrando...")
     except Exception as e:
         logger.critical(f"Erro fatal: {e}")
-        sys.exit(1) 
+        sys.exit(1)

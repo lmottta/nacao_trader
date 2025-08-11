@@ -212,14 +212,17 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }));
 
         setAssets(assetsToUpdate);
+        // Atualização imediata
         updateAssetPrices(assetsToUpdate);
 
+        // Revalidação periódica a cada 60 segundos
         if (updateIntervalRef.current) {
           clearInterval(updateIntervalRef.current);
         }
         updateIntervalRef.current = setInterval(() => {
           // Acessa o estado mais recente dos ativos para a atualização
           setAssets(currentAssets => {
+            console.log('Revalidando preços dos ativos...');
             updateAssetPrices(currentAssets);
             return currentAssets; // Retorna o estado inalterado, pois a atualização é assíncrona
           });

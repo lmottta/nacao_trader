@@ -1,0 +1,208 @@
+# Docker Compose para ambiente de monitoramento do Nação Trader
+version: '3.8'
+
+services:
+  # Prometheus - Coleta e armazenamento de métricas
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: nacao-trader-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./config/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--storage.tsdb.retention.size=10GB'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+      - '--log.level=info'
+    restart: unless-stopped
+    networks:
+      - monitoring
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.localhost`)"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+
+  # Grafana - Visualização de métricas
+  grafana:
+    image: grafana/grafana:latest
+    container_name: nacao-trader-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana_dashboard.json:/var/lib/grafana/dashboards/nacao_trader.json:ro
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/nacao_trader.json
+    restart: unless-stopped
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.localhost`)"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+
+  # Alertmanager - Gerenciamento de alertas
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: nacao-trader-alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./config/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+      - '--log.level=info'
+    restart: unless-stopped
+    networks:
+      - monitoring
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.alertmanager.rule=Host(`alertmanager.localhost`)"
+      - "traefik.http.services.alertmanager.loadbalancer.server.port=9093"
+
+  # Node Exporter - Métricas do sistema
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: nacao-trader-node-exporter
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # Redis Exporter - Métricas do Redis
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: nacao-trader-redis-exporter
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://host.docker.internal:6379
+    restart: unless-stopped
+    networks:
+      - monitoring
+    depends_on:
+      - redis
+
+  # Redis - Cache distribuído
+  redis:
+    image: redis:7-alpine
+    container_name: nacao-trader-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Push Gateway - Para métricas batch
+  pushgateway:
+    image: prom/pushgateway:latest
+    container_name: nacao-trader-pushgateway
+    ports:
+      - "9091:9091"
+    restart: unless-stopped
+    networks:
+      - monitoring
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pushgateway.rule=Host(`pushgateway.localhost`)"
+      - "traefik.http.services.pushgateway.loadbalancer.server.port=9091"
+
+  # Blackbox Exporter - Monitoramento de endpoints
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    container_name: nacao-trader-blackbox-exporter
+    ports:
+      - "9115:9115"
+    volumes:
+      - ./config/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # cAdvisor - Métricas de containers
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: nacao-trader-cadvisor
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    devices:
+      - /dev/kmsg
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # Traefik - Reverse proxy (opcional)
+  traefik:
+    image: traefik:v2.10
+    container_name: nacao-trader-traefik
+    ports:
+      - "80:80"
+      - "8081:8080"  # Dashboard do Traefik
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+volumes:
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  alertmanager_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  monitoring:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

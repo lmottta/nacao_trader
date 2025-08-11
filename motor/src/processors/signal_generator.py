@@ -7,7 +7,9 @@ from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import pandas as pd
-from loguru import logger
+from src.utils.logger import setup_logger
+
+logger = setup_logger("signal_generator", "signal_generator.log")
 
 from src.models.signal import (
     IndicatorValues,
@@ -20,126 +22,88 @@ from src.models.signal import (
 from src.utils.config import settings
 
 
-def generate_signal(
-    asset_id: str,
-    timeframe: str = "1d",
-    lookback_periods: int = 100,
-) -> Dict[str, Any]:
+async def main(realtime_data: Dict[str, Any]):
     """
-    Gera um sinal de trading para um ativo específico.
-    
-    Esta é uma implementação inicial que simula a geração de sinais.
-    Posteriormente, será substituída por uma implementação real
-    utilizando modelos de ML e análise técnica.
-    
-    Args:
-        asset_id: ID do ativo
-        timeframe: Timeframe para análise (1m, 5m, 15m, 1h, 4h, 1d, 1w)
-        lookback_periods: Número de períodos para análise retroativa
-        
-    Returns:
-        Dicionário contendo o sinal gerado
+    Função principal para gerar sinais com base nos dados de mercado em tempo real.
+    """
+    logger.info("Iniciando geração de sinais com dados em tempo real...")
+    signals_to_insert = []
+
+    for symbol, data in realtime_data.items():
+        if 'error' in data or not data.get('last_price'):
+            logger.warning(f"Dados inválidos para {symbol}, pulando geração de sinal.")
+            continue
+
+        # Aqui, uma lógica de análise técnica mais sofisticada seria aplicada.
+        # Por enquanto, usaremos uma lógica simplificada baseada no preço.
+        signal = generate_signal_from_realtime_data(data)
+        if signal:
+            signals_to_insert.append(signal)
+
+    if signals_to_insert:
+        try:
+            from src.utils.supabase_client import get_supabase_client
+            supabase = get_supabase_client()
+            supabase.table('signals').insert(signals_to_insert).execute()
+            logger.info(f"{len(signals_to_insert)} novos sinais inseridos no banco de dados.")
+        except Exception as e:
+            logger.error(f"Erro ao inserir sinais no banco de dados: {e}")
+
+def generate_signal_from_realtime_data(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Gera um sinal de trading para um ativo com base em dados de tempo real.
     """
     try:
-        # Simulação: em uma implementação real, buscaríamos os dados do ativo
-        # Para simulação, geramos dados aleatórios que parecem razoáveis
-        asset_symbol = f"ASSET_{asset_id}"  # Em uma implementação real, buscaríamos do banco
-        
-        # Gerar direção aleatória com maior tendência para CALL (otimismo do mercado)
-        direction_weights = [0.55, 0.40, 0.05]  # CALL, PUT, NEUTRAL
-        direction = random.choices(
-            [SignalDirection.CALL, SignalDirection.PUT, SignalDirection.NEUTRAL],
-            weights=direction_weights,
-            k=1
-        )[0]
-        
-        # Gerar confiança com base na direção
-        if direction == SignalDirection.CALL:
-            confidence = random.uniform(0.65, 0.95)
-        elif direction == SignalDirection.PUT:
-            confidence = random.uniform(0.60, 0.90)
+        asset_symbol = data['symbol']
+        current_price = data['last_price']
+        open_price = data.get('open', current_price)
+
+        # Lógica de decisão simples: se o preço subiu, CALL; se desceu, PUT.
+        if current_price > open_price:
+            direction = SignalDirection.CALL
+            confidence = 0.65 + (current_price - open_price) / open_price * 2
         else:
-            confidence = random.uniform(0.40, 0.60)
+            direction = SignalDirection.PUT
+            confidence = 0.65 + (open_price - current_price) / open_price * 2
         
-        # Arredondar confiança para 2 casas decimais
-        confidence = round(confidence, 2)
-        
-        # Definir preço atual simulado
-        current_price = round(random.uniform(50, 500), 2)
-        
-        # Calcular price_target e stop_loss com base na direção e volatilidade simulada
-        volatility = random.uniform(0.02, 0.08)  # 2-8% de volatilidade
-        
+        confidence = round(min(max(confidence, 0.55), 0.95), 2)
+
+        volatility = (data.get('high', current_price) - data.get('low', current_price)) / current_price
         if direction == SignalDirection.CALL:
-            price_target = round(current_price * (1 + volatility * 2), 2)
-            stop_loss = round(current_price * (1 - volatility), 2)
-        elif direction == SignalDirection.PUT:
-            price_target = round(current_price * (1 - volatility * 2), 2)
-            stop_loss = round(current_price * (1 + volatility), 2)
+            price_target = round(current_price * (1 + volatility * 1.5), 4)
+            stop_loss = round(current_price * (1 - volatility * 0.75), 4)
         else:
-            price_target = None
-            stop_loss = None
-        
-        # Gerar indicadores técnicos simulados
-        rsi_value = 30.0 if direction == SignalDirection.CALL else 70.0 if direction == SignalDirection.PUT else 50.0
-        rsi_value += random.uniform(-10, 10)  # Adicionar ruído
-        rsi_value = min(max(rsi_value, 0), 100)  # Garantir que está entre 0-100
-        
-        macd_interpretation = "bullish" if direction == SignalDirection.CALL else "bearish" if direction == SignalDirection.PUT else "neutral"
-        
-        sma_50 = current_price * (0.95 if direction == SignalDirection.CALL else 1.05 if direction == SignalDirection.PUT else 1.0)
-        sma_200 = current_price * (0.90 if direction == SignalDirection.CALL else 1.10 if direction == SignalDirection.PUT else 1.0)
-        
+            price_target = round(current_price * (1 - volatility * 1.5), 4)
+            stop_loss = round(current_price * (1 + volatility * 0.75), 4)
+
+        # Simulação de indicadores
+        rsi_value = 50 + (confidence - 0.75) * 100
         indicators = IndicatorValues(
             rsi=round(rsi_value, 1),
-            macd={
-                "value": round(random.uniform(-2, 2), 2),
-                "signal": round(random.uniform(-1, 1), 2),
-                "histogram": round(random.uniform(-1, 1), 2),
-                "interpretation": macd_interpretation,
-            },
-            sma={
-                "sma_50": round(sma_50, 2),
-                "sma_200": round(sma_200, 2),
-                "interpretation": macd_interpretation,
-            },
-            patterns=[
-                random.choice(["doji", "hammer", "engulfing"]) 
-                for _ in range(random.randint(0, 2))
-            ],
+            macd={"interpretation": "bullish" if direction == SignalDirection.CALL else "bearish"},
+            sma={},
+            patterns=[]
         )
-        
-        # Determine signal source based on confidence
-        if confidence > 0.85:
-            source = SignalSource.ENSEMBLE
-        elif confidence > 0.75:
-            source = SignalSource.ML_ADVANCED
-        elif confidence > 0.65:
-            source = SignalSource.ML_BASIC
-        else:
-            source = SignalSource.TECHNICAL
-        
-        # Create signal object
+
         signal = Signal(
-            id=None,  # will be assigned by database
-            asset_id=asset_id,
             asset_symbol=asset_symbol,
             direction=direction,
             confidence=confidence,
             price_target=price_target,
             stop_loss=stop_loss,
             generated_at=datetime.now(),
-            valid_until=None,  # will be calculated by validator
             status=SignalStatus.ACTIVE,
-            timeframe=timeframe,
-            source=source,
+            timeframe='1m',
+            source=SignalSource.REALTIME,
             indicators=indicators,
-            notes=generate_signal_notes(direction, indicators, asset_symbol),
-            created_by="system",
+            notes=f"Sinal gerado a partir de dados em tempo real. Preço atual: {current_price}",
+            created_by="realtime_system",
         )
-        
-        # Convert to dict (auto-calculates valid_until via validator)
-        return signal.dict()
+        return signal.dict(exclude_none=True)
+
+    except Exception as e:
+        logger.error(f"Erro ao gerar sinal para {data.get('symbol')}: {e}")
+        return None
         
     except Exception as e:
         logger.error(f"Erro ao gerar sinal: {e}")
@@ -236,4 +200,4 @@ def backtest_signal_strategy(
         "sharpe_ratio": round(sharpe_ratio, 2),
         "max_drawdown": round(max_drawdown, 2),
         "expected_return": round((win_rate * avg_profit) - ((1 - win_rate) * avg_loss), 2),
-    } 
+    }

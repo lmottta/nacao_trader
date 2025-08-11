@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 
 # Adicionar diretório raiz ao PYTHONPATH para importação relativa
-ROOT_DIR = Path(__file__).parent
+ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.append(str(ROOT_DIR))
 
 try:
@@ -30,11 +30,12 @@ def main():
     Função principal para iniciar o coletor de dados em tempo real.
     """
     # Configurar logging
-    log_dir = Path("logs")
-    log_dir.mkdir(exist_ok=True)
+    log_dir = ROOT_DIR / "data" / "realtime" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
     
     log_file = log_dir / "realtime_collector.log"
-    setup_logger(log_file, level=settings.LOG_LEVEL)
+    logger = setup_logger("realtime_collector", log_file, level=settings.LOG_LEVEL)
+    logger.info("--- INICIANDO TESTE DE LOGGING ---")
     
     # Banner
     print("=" * 80)
@@ -44,7 +45,7 @@ def main():
     print("=" * 80)
     
     # Criar diretório de dados
-    data_dir = Path("data/realtime")
+    data_dir = ROOT_DIR / "data" / "realtime"
     data_dir.mkdir(exist_ok=True, parents=True)
     
     # Executar coletor assíncrono
@@ -59,4 +60,4 @@ def main():
         sys.exit(1)
 
 if __name__ == "__main__":
-    main() 
+    main()

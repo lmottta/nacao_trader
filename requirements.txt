@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pandas
+numpy
+yfinance
+requests
+tenacity
+python-dotenv
+scikit-learn

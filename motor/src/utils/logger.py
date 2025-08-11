@@ -22,13 +22,6 @@ from loguru import logger
 LOG_DIR = Path("logs")
 LOG_DIR.mkdir(exist_ok=True)
 
-# Limpar loggers existentes
-logger.remove()
-
-# Variáveis de contexto global
-HOSTNAME = socket.gethostname()
-VERSION = "1.0.0"  # Deve ser extraído de um arquivo de versão ou variável de ambiente
-
 # Carregar configuração de ambiente (dev, test, prod)
 ENVIRONMENT = os.getenv("ENV", "development")
 
@@ -40,70 +33,50 @@ LOG_LEVELS = {
 }
 DEFAULT_LOG_LEVEL = LOG_LEVELS.get(ENVIRONMENT, "INFO")
 
-# Formato JSON para logs
-class JsonFormatter:
-    """Formata mensagens de log como JSON."""
-    
-    def __call__(self, record: Dict[str, Any]) -> str:
-        """
-        Formata um registro de log como JSON.
-        
-        Args:
-            record: O registro de log a ser formatado
-            
-        Returns:
-            str: Registro formatado como JSON
-        """
-        log_data = {
-            "timestamp": record["time"].strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            "level": record["level"].name,
-            "message": record["message"],
-            "logger": record["name"],
-            "file": record["file"].name,
-            "line": record["line"],
-            "function": record["function"],
-            "environment": ENVIRONMENT,
-            "hostname": HOSTNAME,
-            "version": VERSION
-        }
-        
-        # Adicionar exceção se presente
-        if record["exception"]:
-            log_data["exception"] = {
-                "type": record["exception"].type.__name__,
-                "value": str(record["exception"].value),
-                "traceback": traceback.format_tb(record["exception"].traceback)
-            }
-        
-        # Adicionar contexto extra
-        if record["extra"]:
-            log_data.update(record["extra"])
-        
-        return json.dumps(log_data)
+def setup_logger(
+    log_name: str,
+    log_file: Union[str, Path],
+    level: str = DEFAULT_LOG_LEVEL,
+    rotation: str = "10 MB",
+    retention: str = "7 days",
+) -> "Logger":
+    """Configura e retorna um logger Loguru com um handler de arquivo e um formatador JSON."""
+    # Garante que o diretório do arquivo de log exista
+    log_path = Path(log_file)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
 
-# Configurar saída para console com formatação legível para humanos
-logger.add(
-    sys.stdout,
-    level=os.getenv("LOG_LEVEL", DEFAULT_LOG_LEVEL),
-    format=("<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
-            "<level>{level: <8}</level> | "
-            "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | "
-            "<level>{message}</level>"),
-    colorize=True
-)
+    # Acessa o logger global do Loguru para remover configurações existentes
+    from loguru import logger
+    logger.remove()
 
-# Configurar arquivo de log com formatação JSON
-logger.add(
-    LOG_DIR / f"{ENVIRONMENT}_{{time:YYYY-MM-DD}}.log",
-    level=os.getenv("LOG_LEVEL", DEFAULT_LOG_LEVEL),
-    format="{message}",
-    rotation=os.getenv("LOG_ROTATION", "10 MB"),
-    retention=os.getenv("LOG_RETENTION", "1 week"),
-    compression="zip",
-    enqueue=True,
-    filter=lambda record: record["level"].no >= logger.level(DEFAULT_LOG_LEVEL).no,
-    serialize=JsonFormatter()
-)
+    # Adiciona o handler de arquivo com serialização JSON nativa do Loguru
+    logger.add(
+        log_path,
+        level=level.upper(),
+        rotation=rotation,
+        retention=retention,
+        enqueue=True,      # Torna a escrita de logs assíncrona e segura
+        serialize=True,    # Ativa a serialização JSON nativa
+        catch=True,        # Captura exceções dentro do logger
+    )
+
+    # Adiciona metadados globais ao contexto do logger
+    # Esses dados estarão disponíveis em todos os logs através de `record['extra']`
+    bound_logger = logger.bind(
+        hostname=HOSTNAME,
+        version=VERSION,
+        environment=ENVIRONMENT
+    )
+
+    bound_logger.info(f"Logger '{log_name}' configurado. Nível: {level}. Arquivo: {log_file}")
+
+    return bound_logger
+
+# Variáveis de contexto global
+HOSTNAME = socket.gethostname()
+VERSION = "1.0.0"  # Deve ser extraído de um arquivo de versão ou variável de ambiente
+
+
 
 def get_logger(name: str) -> logger.__class__:
     """
@@ -209,4 +182,4 @@ def with_context(**context_kwargs):
 # @log_execution_time
 # def funcao_demorada():
 #     # código
-#     pass 
+#     pass

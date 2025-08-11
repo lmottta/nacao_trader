@@ -6,6 +6,7 @@ fastapi==0.103.1
 uvicorn==0.23.2
 httpx
 pydantic==2.4.2
+pydantic-settings==2.0.3
 python-dotenv==1.0.0
 asyncio==3.4.3
 websockets==11.0.3
@@ -26,6 +27,7 @@ pytz==2023.3.post1
 # Análise técnica
 # ta-lib==0.4.26 # Remover - Instalado manualmente via wheel pré-compilado
 pandas-ta==0.3.14b0
+tenacity==8.2.3
 
 # Machine Learning
 scikit-learn==1.3.1
@@ -35,6 +37,15 @@ lightgbm==4.0.0
 xgboost==2.0.0
 optuna==3.3.0
 shap==0.42.1
+tensorflow==2.15.0
+
+# Versionamento de Modelos ML
+mlflow==2.9.2
+
+# Análise de Sentimento
+vaderSentiment==3.3.2
+textblob==0.17.1
+transformers
 
 # Integração Supabase
 # supabase>=2.0,<3.0 # Remover range
@@ -84,4 +95,4 @@ nbformat==5.9.2
 # Utilitários
 tqdm==4.66.1
 schedule==1.2.0
-psycopg2-binary==2.9.7  # Para conexões PostgreSQL 
+psycopg2-binary==2.9.7  # Para conexões PostgreSQL

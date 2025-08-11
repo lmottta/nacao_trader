@@ -1,0 +1,247 @@
+# Configuração do Blackbox Exporter para monitoramento de endpoints
+modules:
+  # Verificação HTTP básica
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 201, 202, 204]
+      method: GET
+      headers:
+        User-Agent: "Nacao-Trader-Monitor/1.0"
+      no_follow_redirects: false
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      tls_config:
+        insecure_skip_verify: false
+      preferred_ip_protocol: "ip4"
+
+  # Verificação HTTP com autenticação
+  http_2xx_auth:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 201, 202]
+      method: GET
+      headers:
+        User-Agent: "Nacao-Trader-Monitor/1.0"
+        Authorization: "Bearer YOUR_API_TOKEN"
+      no_follow_redirects: false
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      tls_config:
+        insecure_skip_verify: false
+
+  # Verificação de APIs financeiras
+  financial_api_check:
+    prober: http
+    timeout: 15s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 201, 202]
+      method: GET
+      headers:
+        User-Agent: "Nacao-Trader-Monitor/1.0"
+        Accept: "application/json"
+      body_regex_on_success_must_match:
+        - ".*"
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      tls_config:
+        insecure_skip_verify: false
+      preferred_ip_protocol: "ip4"
+
+  # Verificação específica para Yahoo Finance
+  yahoo_finance_check:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      method: GET
+      headers:
+        User-Agent: "Mozilla/5.0 (compatible; Nacao-Trader-Monitor/1.0)"
+        Accept: "application/json, text/plain, */*"
+      body_regex_on_success_must_match:
+        - ".*chart.*"
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      tls_config:
+        insecure_skip_verify: false
+
+  # Verificação específica para Finnhub
+  finnhub_check:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 401]  # 401 é esperado sem token válido
+      method: GET
+      headers:
+        User-Agent: "Nacao-Trader-Monitor/1.0"
+        Accept: "application/json"
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      tls_config:
+        insecure_skip_verify: false
+
+  # Verificação específica para Alpha Vantage
+  alpha_vantage_check:
+    prober: http
+    timeout: 15s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      method: GET
+      headers:
+        User-Agent: "Nacao-Trader-Monitor/1.0"
+        Accept: "application/json"
+      body_regex_on_success_must_match:
+        - ".*Time Series.*|.*Error Message.*"
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      tls_config:
+        insecure_skip_verify: false
+
+  # Verificação HTTPS com certificado
+  https_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 201, 202]
+      method: GET
+      headers:
+        User-Agent: "Nacao-Trader-Monitor/1.0"
+      no_follow_redirects: false
+      fail_if_ssl: false
+      fail_if_not_ssl: true  # Falha se não for HTTPS
+      tls_config:
+        insecure_skip_verify: false
+      preferred_ip_protocol: "ip4"
+
+  # Verificação TCP básica
+  tcp_connect:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: "ip4"
+
+  # Verificação de porta específica (Redis)
+  redis_tcp:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: "ip4"
+      query_response:
+        - expect: "+PONG"
+          send: "PING\r\n"
+
+  # Verificação de porta específica (PostgreSQL)
+  postgres_tcp:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: "ip4"
+
+  # Verificação ICMP (ping)
+  icmp:
+    prober: icmp
+    timeout: 5s
+    icmp:
+      preferred_ip_protocol: "ip4"
+      source_ip_address: "0.0.0.0"
+
+  # Verificação DNS
+  dns_check:
+    prober: dns
+    timeout: 5s
+    dns:
+      query_name: "example.com"
+      query_type: "A"
+      valid_rcodes:
+        - NOERROR
+      validate_answer_rrs:
+        fail_if_matches_regexp:
+          - ".*"
+        fail_if_not_matches_regexp:
+          - ".*"
+      validate_authority_rrs:
+        fail_if_matches_regexp:
+          - ".*"
+      validate_additional_rrs:
+        fail_if_matches_regexp:
+          - ".*"
+      preferred_ip_protocol: "ip4"
+
+  # Verificação de API com POST
+  http_post_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 201, 202]
+      method: POST
+      headers:
+        Content-Type: "application/json"
+        User-Agent: "Nacao-Trader-Monitor/1.0"
+      body: '{"test": "probe"}'
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      tls_config:
+        insecure_skip_verify: false
+
+  # Verificação de WebSocket
+  websocket_check:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1"]
+      valid_status_codes: [101]  # Switching Protocols
+      method: GET
+      headers:
+        Connection: "Upgrade"
+        Upgrade: "websocket"
+        Sec-WebSocket-Key: "dGhlIHNhbXBsZSBub25jZQ=="
+        Sec-WebSocket-Version: "13"
+        User-Agent: "Nacao-Trader-Monitor/1.0"
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      tls_config:
+        insecure_skip_verify: false
+
+  # Verificação de API com rate limiting
+  rate_limited_api:
+    prober: http
+    timeout: 30s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 201, 202, 429]  # 429 = Too Many Requests
+      method: GET
+      headers:
+        User-Agent: "Nacao-Trader-Monitor/1.0"
+        Accept: "application/json"
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      tls_config:
+        insecure_skip_verify: false
+
+  # Verificação de saúde da aplicação
+  health_check:
+    prober: http
+    timeout: 5s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      method: GET
+      headers:
+        User-Agent: "Nacao-Trader-Monitor/1.0"
+      body_regex_on_success_must_match:
+        - ".*healthy.*|.*ok.*|.*status.*"
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      tls_config:
+        insecure_skip_verify: false
+      preferred_ip_protocol: "ip4"

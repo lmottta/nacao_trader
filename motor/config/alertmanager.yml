@@ -1,0 +1,325 @@
+# Configuração do Alertmanager para o Nação Trader
+global:
+  # Configurações SMTP para envio de emails
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'alerts@nacaotrader.com'
+  smtp_auth_username: 'alerts@nacaotrader.com'
+  smtp_auth_password: 'your_email_password'
+  smtp_require_tls: true
+
+  # Configurações do Slack (opcional)
+  slack_api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+
+# Templates para formatação de alertas
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Configuração de rotas
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'default-receiver'
+  routes:
+    # Alertas críticos - notificação imediata
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 0s
+      repeat_interval: 5m
+      continue: true
+    
+    # Alertas de sistema
+    - match:
+        component: system
+      receiver: 'system-alerts'
+      group_interval: 5m
+      repeat_interval: 30m
+    
+    # Alertas de coleta de dados
+    - match:
+        component: data_collection
+      receiver: 'data-collection-alerts'
+      group_interval: 2m
+      repeat_interval: 15m
+    
+    # Alertas de circuit breaker
+    - match:
+        component: circuit_breaker
+      receiver: 'circuit-breaker-alerts'
+      group_interval: 1m
+      repeat_interval: 10m
+    
+    # Alertas de cache
+    - match:
+        component: cache
+      receiver: 'cache-alerts'
+      group_interval: 5m
+      repeat_interval: 30m
+    
+    # Alertas de sinais de trading
+    - match:
+        component: trading_signals
+      receiver: 'trading-alerts'
+      group_interval: 10m
+      repeat_interval: 1h
+    
+    # Alertas de performance
+    - match:
+        component: performance
+      receiver: 'performance-alerts'
+      group_interval: 5m
+      repeat_interval: 30m
+    
+    # Alertas de conectividade
+    - match:
+        component: connectivity
+      receiver: 'connectivity-alerts'
+      group_interval: 1m
+      repeat_interval: 5m
+    
+    # Alertas de negócio
+    - match:
+        component: business
+      receiver: 'business-alerts'
+      group_interval: 15m
+      repeat_interval: 2h
+
+# Configuração de receivers
+receivers:
+  # Receiver padrão
+  - name: 'default-receiver'
+    email_configs:
+      - to: 'admin@nacaotrader.com'
+        subject: '[Nação Trader] Alerta: {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          Alerta: {{ .Annotations.summary }}
+          Descrição: {{ .Annotations.description }}
+          Severidade: {{ .Labels.severity }}
+          Componente: {{ .Labels.component }}
+          Início: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ if .EndsAt }}Fim: {{ .EndsAt.Format "2006-01-02 15:04:05" }}{{ end }}
+          
+          Labels:
+          {{ range .Labels.SortedPairs }}
+          - {{ .Name }}: {{ .Value }}
+          {{ end }}
+          {{ end }}
+
+  # Alertas críticos
+  - name: 'critical-alerts'
+    email_configs:
+      - to: 'admin@nacaotrader.com,ops@nacaotrader.com'
+        subject: '🚨 [CRÍTICO] Nação Trader: {{ .GroupLabels.alertname }}'
+        body: |
+          ⚠️ ALERTA CRÍTICO DETECTADO ⚠️
+          
+          {{ range .Alerts }}
+          🔥 {{ .Annotations.summary }}
+          📝 {{ .Annotations.description }}
+          🏷️ Severidade: {{ .Labels.severity }}
+          🔧 Componente: {{ .Labels.component }}
+          ⏰ Início: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          
+          {{ end }}
+          
+          Ação imediata necessária!
+        headers:
+          Priority: 'high'
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#alerts-critical'
+        title: '🚨 Alerta Crítico - Nação Trader'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          Severidade: `{{ .Labels.severity }}`
+          Componente: `{{ .Labels.component }}`
+          {{ end }}
+        color: 'danger'
+
+  # Alertas de sistema
+  - name: 'system-alerts'
+    email_configs:
+      - to: 'ops@nacaotrader.com'
+        subject: '[Sistema] Nação Trader: {{ .GroupLabels.alertname }}'
+        body: |
+          Alerta de Sistema Detectado
+          
+          {{ range .Alerts }}
+          Resumo: {{ .Annotations.summary }}
+          Descrição: {{ .Annotations.description }}
+          Severidade: {{ .Labels.severity }}
+          Início: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+
+  # Alertas de coleta de dados
+  - name: 'data-collection-alerts'
+    email_configs:
+      - to: 'data-team@nacaotrader.com'
+        subject: '[Coleta de Dados] Nação Trader: {{ .GroupLabels.alertname }}'
+        body: |
+          Problema na Coleta de Dados
+          
+          {{ range .Alerts }}
+          Resumo: {{ .Annotations.summary }}
+          Descrição: {{ .Annotations.description }}
+          Provider: {{ .Labels.provider }}
+          Severidade: {{ .Labels.severity }}
+          Início: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#data-alerts'
+        title: '📊 Alerta de Coleta de Dados'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          Provider: `{{ .Labels.provider }}`
+          {{ end }}
+        color: 'warning'
+
+  # Alertas de circuit breaker
+  - name: 'circuit-breaker-alerts'
+    email_configs:
+      - to: 'ops@nacaotrader.com'
+        subject: '[Circuit Breaker] Nação Trader: {{ .GroupLabels.alertname }}'
+        body: |
+          Circuit Breaker Ativado
+          
+          {{ range .Alerts }}
+          Resumo: {{ .Annotations.summary }}
+          Descrição: {{ .Annotations.description }}
+          Circuit Breaker: {{ .Labels.name }}
+          Estado: {{ .Labels.state }}
+          Início: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+
+  # Alertas de cache
+  - name: 'cache-alerts'
+    email_configs:
+      - to: 'ops@nacaotrader.com'
+        subject: '[Cache] Nação Trader: {{ .GroupLabels.alertname }}'
+        body: |
+          Problema no Sistema de Cache
+          
+          {{ range .Alerts }}
+          Resumo: {{ .Annotations.summary }}
+          Descrição: {{ .Annotations.description }}
+          Nível do Cache: {{ .Labels.level }}
+          Severidade: {{ .Labels.severity }}
+          Início: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+
+  # Alertas de sinais de trading
+  - name: 'trading-alerts'
+    email_configs:
+      - to: 'trading-team@nacaotrader.com'
+        subject: '[Trading] Nação Trader: {{ .GroupLabels.alertname }}'
+        body: |
+          Alerta nos Sinais de Trading
+          
+          {{ range .Alerts }}
+          Resumo: {{ .Annotations.summary }}
+          Descrição: {{ .Annotations.description }}
+          Símbolo: {{ .Labels.symbol }}
+          Tipo de Sinal: {{ .Labels.signal_type }}
+          Início: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#trading-alerts'
+        title: '📈 Alerta de Trading'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          Símbolo: `{{ .Labels.symbol }}`
+          {{ end }}
+        color: 'good'
+
+  # Alertas de performance
+  - name: 'performance-alerts'
+    email_configs:
+      - to: 'dev-team@nacaotrader.com'
+        subject: '[Performance] Nação Trader: {{ .GroupLabels.alertname }}'
+        body: |
+          Problema de Performance Detectado
+          
+          {{ range .Alerts }}
+          Resumo: {{ .Annotations.summary }}
+          Descrição: {{ .Annotations.description }}
+          Função: {{ .Labels.function_name }}
+          Severidade: {{ .Labels.severity }}
+          Início: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+
+  # Alertas de conectividade
+  - name: 'connectivity-alerts'
+    email_configs:
+      - to: 'ops@nacaotrader.com'
+        subject: '[Conectividade] Nação Trader: {{ .GroupLabels.alertname }}'
+        body: |
+          Problema de Conectividade
+          
+          {{ range .Alerts }}
+          Resumo: {{ .Annotations.summary }}
+          Descrição: {{ .Annotations.description }}
+          Instância: {{ .Labels.instance }}
+          Severidade: {{ .Labels.severity }}
+          Início: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#connectivity-alerts'
+        title: '🔌 Alerta de Conectividade'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          Instância: `{{ .Labels.instance }}`
+          {{ end }}
+        color: 'danger'
+
+  # Alertas de negócio
+  - name: 'business-alerts'
+    email_configs:
+      - to: 'business@nacaotrader.com'
+        subject: '[Negócio] Nação Trader: {{ .GroupLabels.alertname }}'
+        body: |
+          Alerta de Negócio
+          
+          {{ range .Alerts }}
+          Resumo: {{ .Annotations.summary }}
+          Descrição: {{ .Annotations.description }}
+          Severidade: {{ .Labels.severity }}
+          Início: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+
+# Configuração de inibição
+inhibit_rules:
+  # Inibir alertas de warning quando há alertas críticos
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'cluster', 'service']
+  
+  # Inibir alertas de API quando circuit breaker está aberto
+  - source_match:
+      alertname: 'CircuitBreakerOpen'
+    target_match:
+      component: 'data_collection'
+    equal: ['provider']
+  
+  # Inibir alertas de cache quando sistema está com problemas
+  - source_match:
+      component: 'system'
+      severity: 'critical'
+    target_match:
+      component: 'cache'
+    equal: ['instance']
