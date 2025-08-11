@@ -1,6 +1,86 @@
+# Dependencies
 node_modules
+package-lock.json
+
+# Build outputs
 build
 dist
+dist-scripts
+
+# Version control
 .git
-.trae
+.gitignore
+
+# IDE and editor files
+.cursor
+.bolt
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Environment and config
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.example
+
+# Backend (Python motor)
+motor/
+requirements.txt
+test_endpoint.py
+restart_motor.bat
+run_backend.bat
+
+# Data and cache
+data/
+cache/
+
+# Documentation
+doc/
+*.md
+README.md
+DEPLOY.md
+
+# Scripts and tools
+scripts/
+start_project.bat
+start_project.sh
+
+# Logs and temporary files
+*.log
+*.tmp
 .log
+.temp
+bash.exe.stackdump
+
+# Testing
+tests/
+*.test.js
+*.test.ts
+*.spec.js
+*.spec.ts
+
+# Docker
+Dockerfile
+docker-compose.yml
+
+# Railway config
+railway.json
+railway.backend.json
+
+# Development tools
+.trae/
+rules.json
+rules.md
+eslint.config.js
+
+# Supabase (keep only necessary files)
+supabase/.temp/
+supabase/functions/
+
+# TypeScript config (keep only essential)
+tsconfig.node.json

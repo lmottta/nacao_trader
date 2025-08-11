@@ -17,7 +17,7 @@ import random
 from src.utils.config import settings
 from src.utils.supabase_client import get_supabase_client, SupabaseHelper
 from src.utils.logger import get_logger, log_execution_time, with_context
-from src.processors.signal_generator import generate_signal
+from src.processors.signal_generator import generate_signal, generate_signal_from_realtime_data, backtest_signal_strategy
 from src.processors.ml_processor import (
     generate_ml_signal, 
     batch_generate_signals,
@@ -1140,4 +1140,4 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", "8000"))
     host = os.getenv("HOST", "0.0.0.0")
     
-    uvicorn.run("src.api.main:app", host=host, port=port, reload=True) 
+    uvicorn.run("src.api.main:app", host=host, port=port, reload=True)

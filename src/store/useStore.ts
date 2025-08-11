@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabaseClient';
 import { RSI, EMA } from 'technicalindicators';
 
 interface Asset {

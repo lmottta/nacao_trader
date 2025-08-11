@@ -148,6 +148,86 @@ def generate_signal_notes(
                f"antes de tomar posição."
 
 
+def generate_signal(
+    asset_id: str,
+    timeframe: str = "1d",
+    lookback_periods: int = 365,
+    strategy_type: str = "rsi_macd"
+) -> Dict[str, Any]:
+    """
+    Gera um sinal de trading para um ativo específico.
+    
+    Args:
+        asset_id: ID do ativo
+        timeframe: Timeframe para análise
+        lookback_periods: Número de períodos para análise
+        strategy_type: Tipo de estratégia
+        
+    Returns:
+        Dicionário com o sinal gerado
+    """
+    try:
+        # Simulação de geração de sinal
+        direction_options = [SignalDirection.CALL, SignalDirection.PUT, SignalDirection.NEUTRAL]
+        direction = random.choice(direction_options)
+        confidence = random.uniform(0.55, 0.95)
+        
+        # Preço simulado
+        current_price = random.uniform(10, 1000)
+        volatility = random.uniform(0.01, 0.05)
+        
+        if direction == SignalDirection.CALL:
+            price_target = round(current_price * (1 + volatility * 1.5), 4)
+            stop_loss = round(current_price * (1 - volatility * 0.75), 4)
+        elif direction == SignalDirection.PUT:
+            price_target = round(current_price * (1 - volatility * 1.5), 4)
+            stop_loss = round(current_price * (1 + volatility * 0.75), 4)
+        else:
+            price_target = current_price
+            stop_loss = current_price
+        
+        # Indicadores simulados
+        rsi_value = random.uniform(20, 80)
+        indicators = IndicatorValues(
+            rsi=round(rsi_value, 1),
+            macd={"interpretation": "bullish" if direction == SignalDirection.CALL else "bearish"},
+            sma={},
+            patterns=[]
+        )
+        
+        signal = Signal(
+            asset_symbol=f"ASSET_{asset_id}",
+            direction=direction,
+            confidence=round(confidence, 2),
+            price_target=price_target,
+            stop_loss=stop_loss,
+            generated_at=datetime.now(),
+            status=SignalStatus.ACTIVE,
+            timeframe=timeframe,
+            source=SignalSource.TECHNICAL,
+            indicators=indicators,
+            notes=generate_signal_notes(direction, indicators, f"ASSET_{asset_id}"),
+            created_by="signal_generator",
+        )
+        
+        return signal.dict(exclude_none=True)
+        
+    except Exception as e:
+        logger.error(f"Erro ao gerar sinal para {asset_id}: {e}")
+        # Retornar sinal mínimo em caso de erro
+        return {
+            "asset_id": asset_id,
+            "asset_symbol": f"ASSET_{asset_id}",
+            "direction": "NEUTRAL",
+            "confidence": 0.5,
+            "generated_at": datetime.now().isoformat(),
+            "valid_until": (datetime.now() + timedelta(days=1)).isoformat(),
+            "status": "active",
+            "timeframe": timeframe,
+            "source": "technical",
+        }
+
+
 def backtest_signal_strategy(
     asset_id: str,
     strategy_type: str = "rsi_macd",

@@ -4,70 +4,71 @@ import { RealtimeChannel } from '@supabase/supabase-js';
 import { getMarketData } from '../services/marketDataService';
 
 // Definição dos tipos de ativos disponíveis
-export const assetTabs = [
-  { id: 'FTT', label: 'FTT', description: 'Futuros Tradicionais' },
-  { id: '5ST', label: '5ST', description: 'Ações em 5 Segundos' },
-  { id: 'DRT', label: 'DRT', description: 'Derivativos' },
-  { id: 'CFD', label: 'CFD', description: 'Contratos por Diferença' },
-];
+export type AssetType = 'stock' | 'crypto' | 'forex' | 'commodity' | 'index' | 'bond' | 'fund' | 'option' | 'future';
 
-// Mapeamento de tipos de ativos para as abas
-const assetTypeToTabMapping: Record<string, string> = {
-  'stock': 'FTT',
-  'forex': '5ST',
-  'crypto': 'DRT',
-  'cfd': 'CFD',
-  'index': 'FTT',
-};
-
+// Definição da interface Asset
 export interface Asset {
   id: string;
   symbol: string;
   name: string;
-  type: string;
+  type: AssetType;
   description?: string;
-  last_price?: number | null; // Permitir null do DB
-  last_update?: string | null;
+  last_price?: number;
+  last_update?: string;
   ticker?: string;
-  // Novos campos para status de mercado
-  marketStatus?: 'open' | 'closed' | 'extended' | 'pre' | 'post' | 'otc' | null;
-  marketStatusSource?: string | null; // Ex: "Finnhub", "Yahoo"
-  lastStatusUpdate?: string | null; // Timestamp da última atualização do status
+  marketStatus?: string | null;
+  marketStatusSource?: string | null;
+  lastStatusUpdate?: string | null;
 }
 
-// Interface Signal (Precisa ser definida ou importada, garantir alinhamento com DB/utils)
-// TODO: Considerar mover esta interface para um arquivo central de tipos
+// Definição da interface Signal
 export interface Signal {
-  id: string; 
-  asset_id: string; 
-  asset_symbol?: string; // Pode vir ou não, buscar do asset se ausente
-  direction: 'CALL' | 'PUT';
-  accuracy: number;
-  generated_at: string; 
-  valid_until: string; 
-  // Adicionar outros campos relevantes da tabela 'signals'
-  timeframe?: string;
-  source?: string;
-  status?: string;
-  notes?: string;
-  confidence?: number;
+  id: string;
+  asset_symbol: string;
+  signal_type: 'buy' | 'sell' | 'hold';
+  confidence: number;
+  generated_at: string;
+  valid_until: string;
   price_target?: number;
   stop_loss?: number;
-  indicators?: any; // ou um tipo mais específico
-  model_performance?: any; // ou um tipo mais específico
+  reasoning?: string;
+  indicators_used?: string[];
+  market_conditions?: string;
+  risk_level?: 'low' | 'medium' | 'high';
+  expected_return?: number;
+  timeframe?: string;
+  source?: string;
 }
 
-// Tipo para status de conexão dos canais Realtime
-type ConnectionStatus = 'connected' | 'error' | 'connecting';
+// Definição dos tipos de abas disponíveis
+export type TabType = 'ALL' | 'FTT' | 'CRYPTO' | 'FOREX' | 'COMMODITIES' | 'INDICES' | 'BONDS' | 'FUNDS' | 'OPTIONS' | 'FUTURES';
 
+// Mapeamento de tipos de ativos para abas
+const assetTypeToTabMapping: Record<string, TabType> = {
+  'stock': 'FTT',
+  'crypto': 'CRYPTO',
+  'forex': 'FOREX',
+  'commodity': 'COMMODITIES',
+  'index': 'INDICES',
+  'bond': 'BONDS',
+  'fund': 'FUNDS',
+  'option': 'OPTIONS',
+  'future': 'FUTURES'
+};
+
+// Definição dos tipos de status de conexão
+type ConnectionStatus = 'connecting' | 'connected' | 'error' | 'disconnected';
+
+// Interface para o status do Realtime
 interface RealtimeStatus {
   assets: ConnectionStatus;
   signals: ConnectionStatus;
 }
 
+// Definição da interface do contexto
 interface AssetContextType {
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
+  activeTab: TabType;
+  setActiveTab: (tab: TabType) => void;
   assets: Asset[];
   filteredAssets: Asset[];
   loading: boolean;
@@ -77,13 +78,14 @@ interface AssetContextType {
   typeFilter: string;
   setTypeFilter: (type: string) => void;
   refreshAssets: () => Promise<void>;
-  getTabFromAssetType: (type: string) => string;
+  getTabFromAssetType: (type: string) => TabType;
   realtimeSignals: Signal[];
   signalsForActiveTab: Signal[];
   realtimeStatus: RealtimeStatus;
   reconnectRealtime: () => void;
 }
 
+// Criação do contexto
 const AssetContext = createContext<AssetContextType | undefined>(undefined);
 
 export function useAssets() {
@@ -94,26 +96,28 @@ export function useAssets() {
   return context;
 }
 
+// Provider do contexto
 export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [activeTab, setActiveTab] = useState<string>('ALL');
+  const [activeTab, setActiveTab] = useState<TabType>('ALL');
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [allSignals, setAllSignals] = useState<Signal[]>([]);
-  const [realtimeSignals, setRealtimeSignals] = useState<Signal[]>([]); // Sinais em tempo real
+  const [realtimeSignals, setRealtimeSignals] = useState<Signal[]>([]);
   const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>({
-    assets: 'connecting',
-    signals: 'connecting'
+    assets: 'disconnected',
+    signals: 'disconnected'
   });
-  
+
+  // Refs para os canais Realtime
   const assetsChannelRef = React.useRef<RealtimeChannel | null>(null);
-  const signalsChannelRef = React.useRef<RealtimeChannel | null>(null); // Ref para canal de sinais
+  const signalsChannelRef = React.useRef<RealtimeChannel | null>(null);
   const updateIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
 
   // Função para mapear um tipo de ativo para sua aba correspondente
-  const getTabFromAssetType = (type: string): string => {
+  const getTabFromAssetType = (type: string): TabType => {
     return assetTypeToTabMapping[type.toLowerCase()] || 'FTT';
   };
 
@@ -128,7 +132,9 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             ...asset,
             last_price: marketData.price,
             last_update: new Date().toISOString(),
-            marketStatus: marketData.source === 'Finnhub' ? (marketData.price > 0 ? 'open' : 'closed') : asset.marketStatus,
+            marketStatus: marketData.marketStatus,
+            marketStatusSource: marketData.source,
+            lastStatusUpdate: new Date().toISOString()
           };
         }
         return asset;
@@ -138,7 +144,7 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setAssets(currentAssets => {
       const newAssets = [...currentAssets];
       updatedAssets.forEach(updatedAsset => {
-        const index = newAssets.findIndex(a => a.id === updatedAsset.id);
+        const index = newAssets.findIndex(a => a.symbol === updatedAsset.symbol);
         if (index !== -1) {
           newAssets[index] = updatedAsset;
         }
@@ -146,145 +152,162 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return newAssets;
     });
 
+    console.log('Atualização de preços concluída.');
   }, []);
 
-  // Buscar ativos do Supabase
+  // Função auxiliar para retry com backoff exponencial
+  const retryWithBackoff = async <T,>(
+    fn: () => Promise<T>,
+    maxRetries: number = 3,
+    baseDelay: number = 1000
+  ): Promise<T> => {
+    let lastError: Error;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (error: unknown) {
+        lastError = error as Error;
+        
+        if (attempt === maxRetries) {
+          throw lastError;
+        }
+        
+        const delay = baseDelay * Math.pow(2, attempt);
+        console.log(`Tentativa ${attempt + 1} falhou, tentando novamente em ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+    
+    throw lastError!;
+  };
+
+  // Verificar conectividade com Supabase
+  const checkSupabaseConnection = async (): Promise<boolean> => {
+    // Temporariamente desabilitado devido a problemas de conectividade
+    console.warn('Verificação do Supabase desabilitada temporariamente');
+    return false;
+  };
+
+  // Dados mock para desenvolvimento
+  const mockAssets: Asset[] = [
+    {
+      id: '1',
+      symbol: 'AAPL',
+      name: 'Apple Inc.',
+      type: 'stock',
+      description: 'Technology company',
+      last_price: 150.25,
+      last_update: new Date().toISOString(),
+      ticker: 'AAPL',
+      marketStatus: 'open'
+    },
+    {
+      id: '2',
+      symbol: 'BTC',
+      name: 'Bitcoin',
+      type: 'crypto',
+      description: 'Cryptocurrency',
+      last_price: 45000.00,
+      last_update: new Date().toISOString(),
+      ticker: 'BTC',
+      marketStatus: 'open'
+    },
+    {
+      id: '3',
+      symbol: 'EUR/USD',
+      name: 'Euro to US Dollar',
+      type: 'forex',
+      description: 'Currency pair',
+      last_price: 1.0850,
+      last_update: new Date().toISOString(),
+      ticker: 'EURUSD',
+      marketStatus: 'open'
+    },
+    {
+      id: '4',
+      symbol: 'GOLD',
+      name: 'Gold',
+      type: 'commodity',
+      description: 'Precious metal',
+      last_price: 2050.00,
+      last_update: new Date().toISOString(),
+      ticker: 'XAUUSD',
+      marketStatus: 'open'
+    },
+    {
+      id: '5',
+      symbol: 'SPX',
+      name: 'S&P 500',
+      type: 'index',
+      description: 'Stock market index',
+      last_price: 4500.00,
+      last_update: new Date().toISOString(),
+      ticker: 'SPX',
+      marketStatus: 'open'
+    }
+  ];
+
+  // Buscar ativos usando dados mock
   const fetchAssets = useCallback(async () => {
     setLoading(true);
     setError(null);
-    console.log("Buscando ativos do Supabase...");
+    console.log("Carregando dados mock de ativos...");
 
     try {
-      const { data, error: fetchError } = await supabase
-        .from('assets')
-        .select('*')
-        .eq('active', true)
-        .order('symbol', { ascending: true });
-
-      if (fetchError) {
-        console.error('Erro ao buscar ativos do Supabase:', fetchError);
-        throw new Error('Falha ao carregar ativos do banco de dados.');
-      }
-
-      if (data && data.length > 0) {
-        // Mapear dados para o formato esperado, incluindo novos campos
-        const formattedAssets: Asset[] = data.map(asset => ({
-          id: asset.id || asset.symbol, // Usar symbol como fallback para id
-          symbol: asset.symbol,
-          name: asset.name,
-          type: asset.asset_type || 'stock', // Definir um tipo padrão se não vier do DB
-          description: asset.description,
-          last_price: asset.last_price,
-          last_update: asset.last_update,
-          ticker: asset.ticker || asset.symbol, // Usar symbol como fallback para ticker
-          marketStatus: asset.market_status || null, // Mapear o status
-          marketStatusSource: asset.market_status_source || null,
-          lastStatusUpdate: asset.last_status_update || null,
-        }));
-        console.log(`Foram encontrados ${formattedAssets.length} ativos.`);
-        setAssets(formattedAssets);
-      } else {
-        console.log('Nenhum ativo encontrado no Supabase.');
-        setAssets([]); // Definir como vazio se nada for encontrado
-      }
-    } catch (err: any) {
-      console.error('Erro detalhado ao buscar ativos:', err);
-      setError(err.message || 'Ocorreu um erro desconhecido ao buscar ativos.');
-      setAssets([]); // Limpar ativos em caso de erro
+      // Simular delay de rede
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      console.log('Ativos mock carregados:', mockAssets.length);
+      setAssets(mockAssets);
+      
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido ao carregar ativos';
+      console.error('Erro ao carregar ativos mock:', err);
+      setError(errorMessage);
+      setAssets([]);
     } finally {
       setLoading(false);
-      console.log("Busca de ativos finalizada.");
-
-      // Iniciar a atualização de preços em tempo real
-      if (data && data.length > 0) {
-        const assetsToUpdate: Asset[] = data.map(asset => ({
-          id: asset.id || asset.symbol,
-          symbol: asset.symbol,
-          name: asset.name,
-          type: asset.asset_type || 'stock',
-          description: asset.description,
-          last_price: asset.last_price,
-          last_update: asset.last_update,
-          ticker: asset.ticker || asset.symbol,
-          marketStatus: asset.market_status || null,
-          marketStatusSource: asset.market_status_source || null,
-          lastStatusUpdate: asset.last_status_update || null,
-        }));
-
-        setAssets(assetsToUpdate);
-        // Atualização imediata
-        updateAssetPrices(assetsToUpdate);
-
-        // Revalidação periódica a cada 60 segundos
-        if (updateIntervalRef.current) {
-          clearInterval(updateIntervalRef.current);
-        }
-        updateIntervalRef.current = setInterval(() => {
-          // Acessa o estado mais recente dos ativos para a atualização
-          setAssets(currentAssets => {
-            console.log('Revalidando preços dos ativos...');
-            updateAssetPrices(currentAssets);
-            return currentAssets; // Retorna o estado inalterado, pois a atualização é assíncrona
-          });
-        }, 60000); // Atualiza a cada 60 segundos
-      } else {
-        setAssets([]);
-      }
-
+      console.log("Carregamento de ativos mock finalizado.");
     }
-  }, [updateAssetPrices]); // useCallback para evitar recriação desnecessária
+  }, []);
 
-  // Buscar sinais iniciais do Supabase
+  // Buscar sinais iniciais do Supabase (temporariamente desabilitado)
   const fetchInitialSignals = useCallback(async () => {
-    console.log("Buscando sinais iniciais do Supabase...");
+    console.log("Função de busca de sinais iniciais temporariamente desabilitada devido a problemas de conectividade");
     try {
-      const { data, error: fetchError } = await supabase
-        .from('signals')
-        .select('*')
-        .order('generated_at', { ascending: false });
-
-      if (fetchError) {
-        console.error('Erro ao buscar sinais iniciais:', fetchError);
-        throw new Error('Falha ao carregar sinais do banco de dados.');
-      }
-
-      if (data) {
-        console.log(`Foram encontrados ${data.length} sinais iniciais.`);
-        setAllSignals(data);
-      }
-    } catch (err: any) {
-      console.error('Erro detalhado ao buscar sinais:', err);
-      setError(err.message || 'Ocorreu um erro desconhecido ao buscar sinais.');
+      // Temporariamente desabilitado devido a problemas de conectividade
+      console.warn('Busca de sinais iniciais do Supabase desabilitada temporariamente');
+      
+      // Usar dados vazios por enquanto
+      setAllSignals([]);
+      console.log('Nenhum sinal inicial carregado (função desabilitada)');
+      
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+      console.error('Erro:', err);
+      console.warn('Continuando sem sinais iniciais devido ao erro:', errorMessage);
     }
   }, []);
 
-  // Buscar sinais do Supabase
+  // Buscar sinais do Supabase (temporariamente desabilitado)
   const fetchSignals = useCallback(async () => {
-    console.log("Buscando sinais do Supabase...");
+    console.log("Função de busca de sinais temporariamente desabilitada devido a problemas de conectividade");
 
     try {
-      // Buscar apenas sinais válidos (valid_until > agora)
-      const { data, error: fetchError } = await supabase
-        .from('signals')
-        .select('*')
-        .gt('valid_until', new Date().toISOString())
-        .order('generated_at', { ascending: false });
-
-      if (fetchError) {
-        console.error('Erro ao buscar sinais do Supabase:', fetchError);
-        return;
-      }
-
-      if (data && data.length > 0) {
-        console.log(`Foram encontrados ${data.length} sinais válidos.`);
-        setRealtimeSignals(data);
-      } else {
-        console.log('Nenhum sinal válido encontrado no Supabase.');
-      }
-    } catch (err: any) {
-      console.error('Erro detalhado ao buscar sinais:', err);
-    }
-  }, []);
+      // Temporariamente desabilitado devido a problemas de conectividade
+      console.warn('Busca de sinais do Supabase desabilitada temporariamente');
+      
+      // Usar dados vazios por enquanto
+      setRealtimeSignals([]);
+      console.log('Nenhum sinal carregado (função desabilitada)');
+      
+    } catch (err: unknown) {
+       const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+       console.error('Erro:', err);
+       console.warn('Continuando sem sinais válidos devido ao erro:', errorMessage);
+     }
+   }, []);
 
   // Configurar canais Realtime
   const setupRealtimeChannels = useCallback(() => {
@@ -294,29 +317,13 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       assetsChannelRef.current = null;
     }
     if (updateIntervalRef.current) {
-        clearInterval(updateIntervalRef.current);
+      clearInterval(updateIntervalRef.current);
+      updateIntervalRef.current = null;
     }
     if (signalsChannelRef.current) {
       supabase.removeChannel(signalsChannelRef.current);
       signalsChannelRef.current = null;
     }
-
-    // Canal para atualizações de SINAIS
-    signalsChannelRef.current = supabase
-      .channel('public:signals')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'signals' }, (payload) => {
-        console.log('Novo sinal recebido!', payload.new);
-        setRealtimeSignals(currentSignals => [payload.new as Signal, ...currentSignals]);
-      })
-      .subscribe((status, err) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('Conectado ao canal de sinais.');
-          setRealtimeStatus(prev => ({ ...prev, signals: 'connected' }));
-        } else if (status === 'CHANNEL_ERROR' || err) {
-          console.error('Erro no canal de sinais:', err);
-          setRealtimeStatus(prev => ({ ...prev, signals: 'error' }));
-        }
-      });
 
     // Configurar canal para assets
     console.log('Configurando Supabase Realtime para tabela assets...');
@@ -327,17 +334,17 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         'postgres_changes',
         { event: '*', schema: 'public', table: 'assets' },
         (payload) => {
-          console.log('Mudança em assets:', payload);
-          fetchAssets(); // Re-buscar todos os ativos quando houver alterações
+          console.log('Realtime recebido para assets:', payload);
+          fetchAssets();
         }
       )
-      .subscribe((status) => {
+      .subscribe((status, err) => {
         if (status === 'SUBSCRIBED') {
           console.log('Conectado ao canal Realtime de assets!');
           setRealtimeStatus(prev => ({ ...prev, assets: 'connected' }));
-          setError(null); // Limpar erros ao conectar com sucesso
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('Erro no canal assets:', status);
+          setError(null);
+        } else if (status === 'CHANNEL_ERROR' || err) {
+          console.error('Erro no canal assets:', status, err);
           setRealtimeStatus(prev => ({ ...prev, assets: 'error' }));
           setError(prev => (prev ? prev : 'Erro de conexão: Erro RT Assets.'));
         } else if (status === 'TIMED_OUT') {
@@ -360,7 +367,6 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         (payload) => {
           console.log('Realtime INSERT recebido para signals:', payload.new);
           const newSignal = payload.new as Signal;
-          // Adiciona o novo sinal ao início da lista
           setRealtimeSignals(currentSignals => [newSignal, ...currentSignals]);
         }
       )
@@ -370,7 +376,6 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         (payload) => {
           console.log('Realtime UPDATE recebido para signals:', payload.new);
           const updatedSignal = payload.new as Signal;
-          // Atualiza o sinal existente na lista
           setRealtimeSignals(currentSignals => 
             currentSignals.map(signal => 
               signal.id === updatedSignal.id ? updatedSignal : signal
@@ -383,8 +388,7 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         { event: 'DELETE', schema: 'public', table: 'signals' },
         (payload) => {
           console.log('Realtime DELETE recebido para signals:', payload.old);
-          const deletedSignalId = payload.old.id;
-          // Remove o sinal da lista
+          const deletedSignalId = (payload.old as { id: string }).id;
           setRealtimeSignals(currentSignals => 
             currentSignals.filter(signal => signal.id !== deletedSignalId)
           );
@@ -394,7 +398,7 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (status === 'SUBSCRIBED') {
           console.log('Conectado ao canal Realtime de signals!');
           setRealtimeStatus(prev => ({ ...prev, signals: 'connected' }));
-          setError(null); // Limpar erros ao conectar com sucesso
+          setError(null);
         } else if (status === 'CHANNEL_ERROR') {
           console.error('Erro no canal signals:', status);
           setRealtimeStatus(prev => ({ ...prev, signals: 'error' }));
@@ -420,9 +424,9 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Efeito para carregar dados e configurar Realtime na inicialização
   useEffect(() => {
     fetchAssets();
-    fetchInitialSignals(); // Buscar sinais ao carregar
-    fetchSignals(); // Busca inicial de sinais
-    setupRealtimeChannels(); // Configurar Realtime
+    fetchInitialSignals();
+    fetchSignals();
+    setupRealtimeChannels();
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -433,7 +437,6 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // Limpeza ao desmontar
     return () => {
       console.log('Removendo inscrição dos canais Realtime e event listener.');
       document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -448,7 +451,7 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
   }, [fetchAssets, fetchInitialSignals, fetchSignals, setupRealtimeChannels]);
 
-  // Adicionar um efeito para exibir mensagem de reconexão quando o status dos canais mudar
+  // Efeito para exibir mensagem de reconexão quando o status dos canais mudar
   useEffect(() => {
     if (realtimeStatus.assets === 'error' || realtimeStatus.signals === 'error') {
       console.log('Erro em um ou ambos os canais Realtime. Exibindo mensagem de erro.');
@@ -460,7 +463,6 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       
       setError(errorMsg);
       
-      // Tentar reconexão automática após 10 segundos
       const timer = setTimeout(() => {
         reconnectRealtime();
       }, 10000);
@@ -471,19 +473,23 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Função para recarregar os ativos manualmente
   const refreshAssets = async () => {
-    await fetchAssets();
-    await fetchSignals();
+    try {
+      console.log('Recarregando ativos e sinais...');
+      await fetchAssets();
+      await fetchSignals();
+      console.log('Recarregamento concluído com sucesso.');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+      console.error('Erro ao recarregar dados:', err);
+      console.warn('Falha no recarregamento, dados podem estar desatualizados:', errorMessage);
+    }
   };
 
-  // Filtragem de ativos baseada no tipo, aba ativa e termo de busca
   // Combina sinais iniciais e em tempo real
   const combinedSignals = React.useMemo(() => {
     const allSignalsMap = new Map<string, Signal>();
 
-    // Adiciona sinais iniciais ao mapa
     allSignals.forEach(signal => allSignalsMap.set(signal.id, signal));
-
-    // Adiciona ou atualiza com sinais em tempo real
     realtimeSignals.forEach(signal => allSignalsMap.set(signal.id, signal));
 
     return Array.from(allSignalsMap.values());
@@ -494,26 +500,16 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (activeTab === 'ALL') {
       return combinedSignals;
     }
-    // Encontra os ativos que pertencem à aba ativa
     const assetsInTab = assets.filter(asset => getTabFromAssetType(asset.type) === activeTab);
     const assetSymbolsInTab = new Set(assetsInTab.map(a => a.symbol));
 
-    // Filtra os sinais com base nos símbolos dos ativos
     return combinedSignals.filter(signal => assetSymbolsInTab.has(signal.asset_symbol || ''));
-
   }, [combinedSignals, assets, activeTab, getTabFromAssetType]);
 
   const filteredAssets = assets.filter(asset => {
-    // Mapeamento do tipo de ativo para a aba
     const assetTab = getTabFromAssetType(asset.type);
-    
-    // Filtro por aba (se não for 'ALL')
     const matchesTab = activeTab === 'ALL' || activeTab === assetTab;
-    
-    // Filtro por tipo (se estiver selecionado)
     const matchesType = typeFilter === 'all' || asset.type.toLowerCase() === typeFilter.toLowerCase();
-    
-    // Filtro por termo de busca
     const matchesSearch = 
       searchTerm === '' || 
       asset.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -537,8 +533,8 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setTypeFilter,
         refreshAssets,
         getTabFromAssetType,
-        realtimeSignals: combinedSignals, // Usar sinais combinados
-        signalsForActiveTab, // Passar sinais filtrados
+        realtimeSignals: combinedSignals,
+        signalsForActiveTab,
         realtimeStatus,
         reconnectRealtime
       }}

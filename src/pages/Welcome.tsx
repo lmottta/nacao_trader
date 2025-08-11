@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowRight, Users, Zap, ShieldCheck, TrendingUp, MessageCircle, Phone, Mail, User } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
+// Componentes de teste removidos temporariamente
 
 const testimonials = [
   {
@@ -203,9 +204,10 @@ const Welcome: React.FC = () => {
           <h1 className="text-5xl md:text-7xl font-extrabold mb-6 text-white drop-shadow-lg leading-tight">
             {HERO_TITLE}
           </h1>
-          <p className="text-2xl md:text-3xl mb-10 text-gray-200 font-medium">
+          <p className="text-2xl md:text-3xl mb-6 text-gray-200 font-medium">
             {HERO_SUBTITLE}
           </p>
+          {/* Componentes de teste removidos temporariamente */}
           <form 
             onSubmit={handleLeadSubmit} 
             className="bg-black/30 backdrop-blur-md rounded-xl p-6 md:p-8 shadow-2xl mx-auto max-w-3xl border border-white/10"
